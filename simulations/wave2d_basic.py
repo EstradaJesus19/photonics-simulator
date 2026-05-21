@@ -4,15 +4,15 @@ from matplotlib.animation import FuncAnimation
 
 
 # Grid parameters
-nx = 150
-ny = 150
-dx = 1.0
-dy = 1.0
+nx = 150 # Number of grid points in x direction
+ny = 150 # Number of grid points in y direction
+dx = 1.0 # Grid spacing in x direction
+dy = 1.0 # Grid spacing in y direction
 
 # Time parameters
-c = 1.0
-dt = 0.4
-steps = 500
+c = 1.0 # Wave speed
+dt = 0.4 # Time step
+steps = 500 # Number of time steps
 
 # Stability condition estimate for 2D wave equation
 courant = c * dt * np.sqrt(1 / dx**2 + 1 / dy**2)
@@ -20,12 +20,12 @@ if courant > 1:
     raise ValueError("Simulation unstable: reduce dt or increase dx/dy.")
 
 # Wave fields
-u_prev = np.zeros((nx, ny))
-u_curr = np.zeros((nx, ny))
-u_next = np.zeros((nx, ny))
+u_prev = np.zeros((nx, ny)) # u at time t-dt
+u_curr = np.zeros((nx, ny)) # u at time t
+u_next = np.zeros((nx, ny)) # u at time t+dt
 
-# Initial pulse in the center
-x0, y0 = nx // 2, ny // 2
+# Initial Gaussian pulse
+x0, y0 = nx // 3, ny // 3
 sigma = 8.0
 
 x = np.arange(nx)
