@@ -180,6 +180,7 @@ A homogeneous medium has the same properties at every point in space. Because of
 In photonics, this is only the simplest case.
 
 More interesting systems involve spatially varying material properties, for example $c = c(x,y)$ (or equivalently $n = n(x,y)$, where `n` is the refractive index).
+
 When the refractive index varies in space, waves can:
 
 - reflect,
@@ -189,95 +190,9 @@ When the refractive index varies in space, waves can:
 - become guided,
 - or become confined.
 
-This will be important in later phases of the project.
+## 8. Initial condition
 
----
-
-## 9. Relation to photonics
-
-Photonics studies the generation, propagation, manipulation, and detection of light.
-
-Light is fundamentally an electromagnetic wave governed by Maxwell's equations. However, under some conditions, simplified scalar wave models can still be useful.
-
-The scalar wave equation can describe approximate wave behavior when:
-
-- polarization effects are not the main focus,
-- the medium is simple,
-- the geometry is not too complex,
-- only qualitative propagation behavior is needed,
-- or the simulation is being used as an educational stepping stone.
-
-In this project, the scalar wave equation is used as a first step before moving toward more realistic electromagnetic simulations.
-
-The learning path is:
-
-```text
-Scalar wave equation
-        ↓
-Finite-difference wave solver
-        ↓
-Spatially varying wave speed / refractive index
-        ↓
-Reflection and refraction
-        ↓
-Electromagnetic FDTD
-        ↓
-Photonic devices and structures
-```
-
----
-
-## 10. Difference between scalar wave simulation and Maxwell simulation
-
-The scalar wave equation solves one field variable:
-
-```math
-u(x,y,t)
-```
-
-A full electromagnetic simulation solves coupled vector fields:
-
-```math
-\mathbf{E}(x,y,z,t)
-```
-
-and
-
-```math
-\mathbf{H}(x,y,z,t)
-```
-
-Maxwell's equations describe how changing electric fields generate magnetic fields and how changing magnetic fields generate electric fields.
-
-The scalar wave equation does not explicitly include:
-
-- electric field vector direction,
-- magnetic field vector direction,
-- polarization,
-- material permittivity,
-- material permeability,
-- boundary conditions for electromagnetic interfaces,
-- electromagnetic energy flow through the Poynting vector.
-
-Therefore, the current model is simplified.
-
-However, it is still valuable because many numerical ideas are shared with real electromagnetic solvers:
-
-- spatial grids,
-- time stepping,
-- finite differences,
-- stability conditions,
-- boundary conditions,
-- sources,
-- absorbing layers,
-- visualization,
-- numerical errors.
-
----
-
-## 11. Initial condition
-
-To start a wave simulation, we need to define the initial state of the field.
+To start a wave simulation, it is necessary to define the initial state of the field.
 
 In the first simulation, the initial condition is a Gaussian pulse centered in the domain:
 
@@ -303,7 +218,7 @@ The pulse spreads outward because the wave equation converts the initial spatial
 
 ---
 
-## 12. Boundary conditions
+## 9. Boundary conditions
 
 The first simulation uses fixed zero boundary conditions:
 
@@ -317,22 +232,13 @@ This means the field is forced to be zero at the boundary.
 
 Physically, this behaves somewhat like a fixed wall. When the wave reaches the boundary, part of it reflects back into the domain.
 
-This is not ideal if we want to simulate open space, because in open space the wave should continue traveling outward instead of reflecting.
+This is not ideal if one wants to simulate open space, because in open space the wave should continue traveling outward instead of reflecting.
 
 However, fixed boundaries are useful for a first simulation because they are simple to implement.
 
-Later, better boundary treatments should be added, such as:
-
-- absorbing boundary conditions,
-- damping layers,
-- perfectly matched layers,
-- periodic boundaries.
-
-Boundary conditions are extremely important in wave simulations because artificial reflections can strongly affect the results.
-
 ---
 
-## 13. Energy intuition
+## 10. Energy intuition
 
 For an ideal wave equation in an infinite or closed lossless domain, wave energy is conserved.
 
@@ -362,95 +268,26 @@ In the simple numerical simulation, energy may not be perfectly conserved becaus
 - numerical approximation errors,
 - boundary reflections,
 - finite grid resolution,
-- time discretization,
-- artificial damping if later introduced.
-
-Tracking energy can be a useful future verification tool.
+- time discretization.
 
 ---
 
-## 14. What should be observed in the first simulation
+## 11. What should be observed in the first simulation
 
 For the first 2D simulation, the expected behavior is:
 
-1. A localized pulse starts at the center.
+1. A localized pulse starts at the given coordinates (usually, the center).
 2. The pulse expands outward.
 3. The wavefront is approximately circular.
 4. The amplitude changes as the wave spreads.
 5. The wave eventually reaches the boundaries.
 6. Reflections appear because of the fixed boundary conditions.
 
-These observations are important because they confirm that the simulation is behaving like a wave system.
-
 If the simulation becomes unstable, the field may grow rapidly without physical meaning. This usually means that the time step is too large for the chosen spatial grid.
 
 ---
 
-## 15. Main limitations of the current model
-
-The current model has several limitations:
-
-1. The field is scalar, not vectorial.
-2. The medium is homogeneous.
-3. The wave speed is constant.
-4. The boundaries are reflective.
-5. There is no explicit source term after the initial pulse.
-6. There are no material interfaces.
-7. There is no absorption.
-8. There is no polarization.
-9. There is no electromagnetic coupling between E and H fields.
-10. The units are normalized rather than physical.
-
-These limitations are acceptable for Phase 1.
-
-The goal of Phase 1 is not to build a complete photonics simulator immediately. The goal is to build the foundation.
-
----
-
-## 16. Why this equation is the right starting point
-
-The scalar wave equation is a good starting point because it introduces the central structure of wave simulations:
-
-```text
-field at next time step
-=
-function of current field, previous field, and spatial curvature
-```
-
-This basic idea will remain important later when implementing more advanced simulations.
-
-Even when the project moves toward Maxwell's equations, the same numerical philosophy will appear:
-
-- define fields on a grid,
-- approximate derivatives,
-- update fields in time,
-- apply boundary conditions,
-- visualize the result,
-- check stability,
-- validate against expected behavior.
-
-Therefore, this first model is not a toy in a useless sense. It is a controlled foundation for more advanced photonics simulation.
-
----
-
-## 17. Questions to answer after running the simulation
-
-After running the first simulation, I should be able to answer:
-
-1. What physical quantity does `u` represent in this simplified model?
-2. Why does the pulse spread outward?
-3. What role does the Laplacian play?
-4. What does the wave speed `c` control?
-5. Why are three time states needed: previous, current, and next?
-6. What happens when the wave reaches the boundary?
-7. Why is the Gaussian pulse a good initial condition?
-8. What are the limitations of a scalar wave model?
-9. How is this related to future electromagnetic FDTD simulations?
-10. What needs to be improved next?
-
----
-
-## 18. Summary
+## 12. Summary
 
 The 2D scalar wave equation describes how a scalar disturbance propagates through space over time.
 
