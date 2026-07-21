@@ -436,13 +436,7 @@ For a continuously driven source:
 Total wave energy versus time step
 ```
 
-Add the continuous-source energy plot here:
-
-```md
 ![Continuous-source energy](../../../outputs/figures/phase_1/2026-07-21_continuous_source_energy.png)
-```
-
-Suggested caption:
 
 ```text
 Figure 2. Total wave energy during continuous sinusoidal excitation. The source injects energy while the sponge layer removes part of the outgoing energy.

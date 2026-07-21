@@ -7,73 +7,71 @@ from matplotlib.animation import FuncAnimation
 # 1. Grid configuration
 # ============================================================
 
-nx = 150  # Number of grid points in the x direction
-ny = 150  # Number of grid points in the y direction
-
-dx = 1.0  # Grid spacing in the x direction
-dy = 1.0  # Grid spacing in the y direction
+nx = 150
+ny = 150
+dx = 1.0
+dy = 1.0
 
 
 # ============================================================
 # 2. Time configuration
 # ============================================================
 
-c = 1.0      # Wave propagation speed
-dt = 0.4     # Time step
-steps = 500  # Total number of simulation steps
+c = 1.0
+dt = 0.4
+steps = 500
 
 
 # ============================================================
-# 3. Initial-condition and source configuration
+# 3. Initial-condition configuration
 # ============================================================
 
-# Available initial conditions:
-# "gaussian" -> localized Gaussian pulse at t = 0
-# "zero"     -> field starts from rest, useful with continuous sources
-initial_condition_type = "gaussian"
+initial_condition_type = "zero"  # "gaussian", "zero"
 
-# Gaussian-pulse parameters
-x0 = nx // 2  # Initial Gaussian center in x
-y0 = ny // 2  # Initial Gaussian center in y
-sigma = 8.0   # Width of the Gaussian pulse
+x0 = nx // 2
+y0 = ny // 2
+sigma = 8.0
 
-# Available source options:
-# "none"       -> no continuous source
-# "point_sine" -> sinusoidal point source
-source_type = "none"
 
-# Point-source parameters
+# ============================================================
+# 4. Source configuration
+# ============================================================
+
+source_type = "point_sine"  # "none", "point_sine"
+
 source_x = nx // 2
 source_y = ny // 2
-
 source_amplitude = 0.5
-source_frequency = 0.03
+
+# Cycles per simulation-time unit
+source_frequency = 0.075
+
 
 # ============================================================
-# 4. Boundary-condition configuration
+# 5. Boundary configuration
 # ============================================================
 
-# Available options:
-# "fixed"  -> reflective, fixed-value outer boundary
-# "sponge" -> smoothly damped layer followed by a fixed outer boundary
-boundary_type = "sponge"
+boundary_type = "sponge"  # "fixed", "sponge"
 
-# Sponge parameters
 damping_width = 50
 max_damping = 0.02
 damping_exponent = 2
 
-# Diagnostics
+
+# ============================================================
+# 6. Visualization and diagnostic configuration
+# ============================================================
+
+display_limit = 0.5
 show_damping_profile = True
 print_energy_interval = 50
 
-# A narrower color range makes weak late-time reflections visible.
-# The initial Gaussian will appear saturated, but that is acceptable while diagnosing boundary reflections.
-display_limit = 0.5
+ENERGY_EPSILON = 1e-12
+MIN_POINTS_PER_WAVELENGTH = 10.0
 
 
 # ============================================================
-# 5. Configuration validation
+# 7. Configuration validation
 # ============================================================
 
 VALID_BOUNDARIES = {"fixed", "sponge"}
@@ -98,8 +96,11 @@ if source_type not in VALID_SOURCES:
         f"Available options: {sorted(VALID_SOURCES)}"
     )
 
+# General validation
 if nx < 3 or ny < 3:
-    raise ValueError("The grid must contain at least 3 points per direction.")
+    raise ValueError(
+        "The grid must contain at least 3 points per direction."
+    )
 
 if dx <= 0 or dy <= 0:
     raise ValueError("Grid spacing dx and dy must be positive.")
@@ -113,40 +114,76 @@ if dt <= 0:
 if steps <= 0:
     raise ValueError("The number of time steps must be positive.")
 
-if sigma <= 0:
-    raise ValueError("Gaussian width sigma must be positive.")
+if display_limit <= 0:
+    raise ValueError("display_limit must be positive.")
 
-if not (0 <= source_x < nx):
-    raise ValueError("source_x must be inside the simulation grid.")
+if print_energy_interval <= 0:
+    raise ValueError("print_energy_interval must be positive.")
 
-if not (0 <= source_y < ny):
-    raise ValueError("source_y must be inside the simulation grid.")
 
-if source_amplitude < 0:
-    raise ValueError("source_amplitude cannot be negative.")
+# Gaussian validation
+if initial_condition_type == "gaussian":
+    if sigma <= 0:
+        raise ValueError("Gaussian width sigma must be positive.")
 
-if source_frequency < 0:
-    raise ValueError("source_frequency cannot be negative.")
+    if not (1 <= x0 < nx - 1):
+        raise ValueError("x0 must be inside the interior domain.")
 
-if damping_width < 1:
-    raise ValueError("damping_width must be at least 1.")
+    if not (1 <= y0 < ny - 1):
+        raise ValueError("y0 must be inside the interior domain.")
 
-maximum_damping_width = min(nx, ny) // 2
 
-if damping_width >= maximum_damping_width:
-    raise ValueError(
-        f"damping_width must be smaller than {maximum_damping_width} for the current grid."
+# Source validation
+if source_type == "point_sine":
+    if not (1 <= source_x < nx - 1):
+        raise ValueError("source_x must be inside the interior domain.")
+
+    if not (1 <= source_y < ny - 1):
+        raise ValueError("source_y must be inside the interior domain.")
+
+    if source_frequency <= 0:
+        raise ValueError("source_frequency must be positive.")
+
+    if not np.isfinite(source_amplitude):
+        raise ValueError("source_amplitude must be finite.")
+    
+    nyquist_frequency = 1.0 / (2.0 * dt)
+
+    if source_frequency >= nyquist_frequency:
+        raise ValueError(
+            "source_frequency must be below the temporal Nyquist "
+            f"frequency ({nyquist_frequency:.3f})."
+        )
+
+
+# Sponge validation
+if boundary_type == "sponge":
+    if damping_width < 1:
+        raise ValueError("damping_width must be at least 1.")
+
+    maximum_damping_width = min(nx, ny) // 2
+
+    if damping_width >= maximum_damping_width:
+        raise ValueError(
+            "damping_width must be smaller than "
+            f"{maximum_damping_width} for the current grid."
+        )
+
+    if max_damping < 0:
+        raise ValueError("max_damping cannot be negative.")
+
+    if damping_exponent <= 0:
+        raise ValueError("damping_exponent must be positive.")
+    
+# Wave generation warning
+if initial_condition_type == "zero" and source_type == "none":
+    print(
+        "Warning: zero initial field and no source selected. "
+        "The field will remain zero."
     )
 
-if max_damping < 0:
-    raise ValueError("max_damping cannot be negative.")
-
-if damping_exponent <= 0:
-    raise ValueError("damping_exponent must be positive.")
-
-
 # ============================================================
-# 6. CFL stability check
+# 8. CFL stability check
 # ============================================================
 
 courant = c * dt * np.sqrt(1.0 / dx**2 + 1.0 / dy**2)
@@ -175,24 +212,35 @@ if source_type == "point_sine":
     print(f"Source amplitude:   {source_amplitude}")
     print(f"Source frequency:   {source_frequency}")
 
+    nominal_wavelength = c / source_frequency
+
+    points_per_wavelength_x = nominal_wavelength / dx
+    points_per_wavelength_y = nominal_wavelength / dy
+
+    print(f"Source wavelength:  {nominal_wavelength:.3f}")
+    print(
+        "Points/wavelength: "
+        f"x={points_per_wavelength_x:.2f}, "
+        f"y={points_per_wavelength_y:.2f}"
+    )
+
+    minimum_points_per_wavelength = min(
+        points_per_wavelength_x,
+        points_per_wavelength_y,
+    )
+
+    if minimum_points_per_wavelength < MIN_POINTS_PER_WAVELENGTH:
+        print(
+            "Warning: the source wavelength has fewer than "
+            f"{MIN_POINTS_PER_WAVELENGTH} grid points. Numerical dispersion may be significant."
+        )
+
 # ============================================================
-# 7. Numerical helper functions
+# 9. Numerical helper functions
 # ============================================================
 
 def apply_fixed_boundaries(field):
-    """
-    Force the outermost grid points to zero.
-
-    This is a homogeneous Dirichlet boundary condition:
-
-        u = 0
-
-    For the fixed-boundary case, this produces strong reflection.
-
-    For the sponge case, the outgoing wave should be attenuated before
-    reaching this outer boundary, so the reflected amplitude should be
-    much smaller.
-    """
+    """Set the outermost cells to zero (homogeneous Dirichlet boundary)."""
     field[0, :] = 0.0
     field[-1, :] = 0.0
     field[:, 0] = 0.0
@@ -200,15 +248,7 @@ def apply_fixed_boundaries(field):
 
 
 def compute_laplacian(field):
-    """
-    Compute the 2D finite-difference Laplacian on interior points.
-
-    The second derivatives are approximated using centered differences:
-
-        d²u/dx² ≈ (u[i+1,j] - 2u[i,j] + u[i-1,j]) / dx²
-
-        d²u/dy² ≈ (u[i,j+1] - 2u[i,j] + u[i,j-1]) / dy²
-    """
+    """Compute the 2D finite-difference Laplacian on interior points."""
     laplacian = np.zeros_like(field)
 
     laplacian[1:-1, 1:-1] = (
@@ -231,9 +271,7 @@ def compute_laplacian(field):
 
 
 def create_gaussian_pulse():
-    """
-    Create the initial 2D Gaussian field distribution.
-    """
+    """Create the initial 2D Gaussian field distribution."""
     x = np.arange(nx)
     y = np.arange(ny)
 
@@ -251,31 +289,14 @@ def create_gaussian_pulse():
 
     return pulse
 
-def create_zero_field():
-    """
-    Create a zero initial field.
 
-    This is useful when the simulation is driven by a continuous source.
-    """
+def create_zero_field():
+    """Create a zero initial field."""
     return np.zeros((nx, ny))
 
+
 def create_damping_profile():
-    """
-    Create the spatial damping coefficient gamma(x,y).
-
-    The damping coefficient is:
-
-    - zero in the central physical region,
-    - smoothly increasing inside the sponge layer,
-    - equal to approximately max_damping at the outer boundary.
-
-    The profile follows:
-
-        gamma = max_damping * normalized_depth**damping_exponent
-
-    A higher exponent makes the damping begin more gently but increase
-    more strongly near the outer edge.
-    """
+    """Create the spatial damping coefficient gamma(x,y)."""
     x_indices = np.arange(nx)
     y_indices = np.arange(ny)
 
@@ -299,17 +320,7 @@ def create_damping_profile():
 
 
 def initialize_fields():
-    """
-    Construct u at t = 0 and at t = -dt.
-
-    The wave equation is second order in time, so two time states are needed.
-
-    For a Gaussian initial condition, the initial velocity is assumed to be zero.
-    A second-order Taylor expansion is used to initialize the previous field.
-
-    For a zero initial condition, both fields are zero.
-    This is useful when the wave is generated by a continuous source.
-    """
+    """Construct u at t = 0 and at t = -dt."""
     if initial_condition_type == "gaussian":
         current = create_gaussian_pulse()
         initial_laplacian = compute_laplacian(current)
@@ -333,21 +344,7 @@ def initialize_fields():
 
 
 def compute_energy(previous, current):
-    """
-    Estimate the total scalar-wave energy in the domain.
-
-    The continuous wave energy density is proportional to:
-
-        0.5 * u_t² + 0.5 * c² * |grad(u)|²
-
-    This diagnostic is useful for comparing boundaries:
-
-    - fixed boundaries should retain most energy in the domain,
-    - sponge boundaries should remove energy as the wave exits.
-
-    The discrete energy is approximate, but it is sufficient for
-    comparing simulations using the same grid and time step.
-    """
+    """Estimate the total scalar-wave energy in the domain."""
     velocity = (current - previous) / dt
 
     gradient_x = np.zeros_like(current)
@@ -367,27 +364,17 @@ def compute_energy(previous, current):
 
     return float(np.sum(energy_density) * dx * dy)
 
+
 def apply_source(field, step_index):
-    """
-    Apply the selected continuous source to the field.
-
-    The current implementation uses a hard point source:
-
-        u[source_x, source_y] += A sin(2π f n)
-
-    where:
-    - A is the source amplitude,
-    - f is the discrete source frequency in cycles per time step,
-    - n is the time-step index.
-
-    This is a simple source model for Phase 1.
-    """
+    """Apply the selected continuous source."""
     if source_type == "none":
         return
 
     if source_type == "point_sine":
+        time = step_index * dt
+
         source_value = source_amplitude * np.sin(
-            2.0 * np.pi * source_frequency * step_index
+            2.0 * np.pi * source_frequency * time
         )
 
         field[source_x, source_y] += source_value
@@ -398,45 +385,32 @@ def apply_source(field, step_index):
         "Use 'none' or 'point_sine'."
     )
 
+
 # ============================================================
-# 8. Create the damping profile
+# 10. Create the damping profile
 # ============================================================
 
 if boundary_type == "sponge":
     damping_profile = create_damping_profile()
+    print(f"Profile minimum:    {damping_profile.min():.6f}")
+    print(f"Profile maximum:    {damping_profile.max():.6f}")
 else:
     damping_profile = np.zeros((nx, ny))
 
-print(f"Profile minimum:    {damping_profile.min():.6f}")
-print(f"Profile maximum:    {damping_profile.max():.6f}")
-
 
 # ============================================================
-# 9. Initialize the wave fields
+# 11. Initialize the wave fields
 # ============================================================
 
 u_prev, u_curr = initialize_fields()
 
 
 # ============================================================
-# 10. Time-stepping function
+# 12. Time-stepping function
 # ============================================================
 
 def step_wave(previous, current):
-    """
-    Advance the scalar wave equation by one time step.
-
-    Fixed-boundary equation:
-
-        u_tt = c² laplacian(u)
-
-    Sponge equation:
-
-        u_tt + gamma(x,y) * u_t = c² laplacian(u)
-
-    The damped equation is discretized with a centered approximation
-    for both u_tt and u_t.
-    """
+    """Advance the scalar wave equation by one time step."""
     laplacian = compute_laplacian(current)
     next_field = np.zeros_like(current)
 
@@ -464,19 +438,22 @@ def step_wave(previous, current):
 
 
 # ============================================================
-# 11. Diagnostic storage
+# 13. Diagnostic storage
 # ============================================================
 
 energy_history = [compute_energy(u_prev, u_curr)]
 initial_energy = energy_history[0]
 
-ENERGY_EPSILON = 1e-12
-
 print(f"Initial energy:     {initial_energy:.6f}")
+
+normalize_energy = (
+    source_type == "none"
+    and initial_energy > ENERGY_EPSILON
+)
 
 
 # ============================================================
-# 12. Optional damping-profile visualization
+# 14. Optional damping-profile visualization
 # ============================================================
 
 if boundary_type == "sponge" and show_damping_profile:
@@ -506,7 +483,7 @@ if boundary_type == "sponge" and show_damping_profile:
 
 
 # ============================================================
-# 13. Wave-field animation
+# 15. Wave-field animation
 # ============================================================
 
 figure, axis = plt.subplots()
@@ -531,9 +508,7 @@ figure.colorbar(
 
 
 def update(frame):
-    """
-    Advance the simulation, record energy, and refresh the animation.
-    """
+    """Advance the simulation, record energy, and refresh the animation."""
     global u_prev, u_curr
 
     u_next = step_wave(u_prev, u_curr)
@@ -544,7 +519,7 @@ def update(frame):
     current_energy = compute_energy(u_curr, u_next)
     energy_history.append(current_energy)
 
-    if source_type == "none" and initial_energy > ENERGY_EPSILON:
+    if normalize_energy:
         relative_energy = current_energy / initial_energy
 
         energy_text = (
@@ -568,7 +543,7 @@ def update(frame):
         or (frame + 1) % print_energy_interval == 0
         or frame == steps - 1
     ):
-        if source_type == "none" and initial_energy > ENERGY_EPSILON:
+        if normalize_energy:
             relative_energy = current_energy / initial_energy
 
             print(
@@ -599,14 +574,14 @@ plt.show()
 
 
 # ============================================================
-# 14. Energy-history plot
+# 16. Energy-history plot
 # ============================================================
 
 energy_array = np.asarray(energy_history)
 
 energy_figure, energy_axis = plt.subplots()
 
-if source_type == "none" and initial_energy > ENERGY_EPSILON:
+if normalize_energy:
     plotted_energy = energy_array / initial_energy
 
     energy_axis.set_title(
