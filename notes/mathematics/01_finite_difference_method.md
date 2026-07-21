@@ -285,9 +285,11 @@ u_{i,j-1}^{n}
 
 This is the discrete Laplacian used in the simulation.
 
+## 9. NumPy slicing implementation of the Laplacian
+
 ---
 
-## 9. The finite-difference update rule
+## 10. The finite-difference update rule
 
 The continuous 2D wave equation is:
 
@@ -347,7 +349,7 @@ It computes the next field using:
 
 ---
 
-## 10. Interpretation of the update rule
+## 11. Interpretation of the update rule
 
 The update rule is:
 
@@ -386,7 +388,7 @@ This is why a local pulse propagates outward instead of simply disappearing.
 
 ---
 
-## 11. Connection to the code implementation
+## 12. Connection to the code implementation
 
 The discrete Laplacian is implemented as:
 
@@ -443,7 +445,7 @@ This means:
 
 ---
 
-## 12. Important note about `np.roll`
+## 13. Important note about `np.roll`
 
 Using `np.roll` is convenient because it shifts the array automatically. However, `np.roll` has an important behavior: It wraps values from one side of the array to the opposite side. For example, when shifting an array to the right, values from the right edge reappear on the left edge. This is similar to a periodic boundary condition. In the current code, the boundaries are manually overwritten afterward:
 
@@ -458,7 +460,7 @@ This reduces the unwanted wraparound effect at the edges for the updated field. 
 
 ---
 
-## 13. Grid resolution
+## 14. Grid resolution
 
 The grid spacing `\Delta x` and `\Delta y` control the spatial resolution. A smaller grid spacing gives a more detailed simulation, but it requires more grid points and more computation. If the grid is too coarse, the wave may appear distorted. This is called _numerical dispersion_.
 
@@ -466,7 +468,7 @@ Numerical dispersion means that the simulated wave speed depends incorrectly on 
 
 ---
 
-## 14. Time step and stability
+## 15. Time step and stability
 
 The time step `\Delta t` controls how far the simulation advances in each update. A larger time step makes the simulation faster, but it can make the simulation unstable. For the 2D wave equation, the time step must satisfy a stability condition called the _CFL condition_.
 
@@ -524,7 +526,7 @@ This prevents the simulation from running with parameters that are likely unstab
 
 ---
 
-## 15. What numerical instability looks like
+## 16. What numerical instability looks like
 
 When the stability condition is violated, the simulation does not simply become slightly inaccurate. Usually, the field amplitude grows rapidly and artificially. Signs of numerical instability include:
 
@@ -539,7 +541,7 @@ This happens because the numerical update amplifies errors instead of propagatin
 
 ---
 
-## 16. Accuracy versus stability
+## 17. Accuracy versus stability
 
 Stability and accuracy are related but not identical. A simulation can be stable but still inaccurate. A stable simulation does not blow up, but it may still have:
 
@@ -561,7 +563,7 @@ Therefore, satisfying the CFL condition is necessary, but not sufficient for a h
 
 ---
 
-## 17. Boundary treatment in finite differences
+## 18. Boundary treatment in finite differences
 
 Finite-difference formulas need neighboring points.
 
@@ -594,7 +596,7 @@ This is easy to implement, but it creates reflections.
 
 ---
 
-## 18. Normalized units
+## 19. Normalized units
 
 The first simulation uses normalized units.
 
@@ -620,7 +622,7 @@ For the first phase, normalized units are acceptable because the main goal is to
 
 ---
 
-## 19. Computational cost
+## 20. Computational cost
 
 The simulation stores the field as arrays of size:
 
@@ -667,7 +669,7 @@ This is important because higher resolution improves accuracy but increases comp
 
 ---
 
-## 20. Summary
+## 21. Summary
 
 The finite difference method transforms the continuous wave equation into a numerical update rule. The continuous equation is:
 

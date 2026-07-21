@@ -300,10 +300,13 @@ def create_damping_profile():
     x_indices = np.arange(nx)
     y_indices = np.arange(ny)
 
-    distance_x = np.minimum(x_indices, nx - 1 - x_indices)  # Distance to the nearest x-boundary
-    distance_y = np.minimum(y_indices, ny - 1 - y_indices)  # Distance to the nearest y-boundary
+    # Distance to the nearest x-boundary
+    distance_x = np.minimum(x_indices, nx - 1 - x_indices)  
+    # Distance to the nearest y-boundary
+    distance_y = np.minimum(y_indices, ny - 1 - y_indices)
 
-    distance_to_edge = np.minimum( # Create a 2D array of distances to the nearest edge
+    # Create a 2D array of distances to the nearest edge
+    distance_to_edge = np.minimum( 
         distance_x[:, np.newaxis],
         distance_y[np.newaxis, :],
     )
