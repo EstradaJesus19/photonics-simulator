@@ -4,211 +4,507 @@ from matplotlib.animation import FuncAnimation
 
 
 # ============================================================
-# 1. Grid parameters
+# 1. Grid configuration
 # ============================================================
 
-nx = 150  # Number of grid points in x direction
-ny = 150  # Number of grid points in y direction
-dx = 1.0  # Grid spacing in x direction
-dy = 1.0  # Grid spacing in y direction
+nx = 150  # Number of grid points in the x direction
+ny = 150  # Number of grid points in the y direction
+
+dx = 1.0  # Grid spacing in the x direction
+dy = 1.0  # Grid spacing in the y direction
 
 
 # ============================================================
-# 2. Time parameters
+# 2. Time configuration
 # ============================================================
 
-c = 1.0      # Wave speed
+c = 1.0      # Wave propagation speed
 dt = 0.4     # Time step
-steps = 500  # Number of time steps
+steps = 500  # Total number of simulation steps
 
 
 # ============================================================
-# 3. Boundary condition parameters
+# 3. Initial-condition configuration
+# ============================================================
+
+x0 = nx // 2  # Initial Gaussian center in x
+y0 = ny // 2  # Initial Gaussian center in y
+
+sigma = 8.0   # Width of the Gaussian pulse
+
+
+# ============================================================
+# 4. Boundary-condition configuration
 # ============================================================
 
 # Available options:
-# "fixed"  -> fixed zero-value boundaries
-# "damped" -> damping layer near the edges + fixed outer boundary
-boundary_type = "damped"
+# "fixed"  -> reflective, fixed-value outer boundary
+# "sponge" -> smoothly damped layer followed by a fixed outer boundary
+boundary_type = "sponge"
 
-damping_width = 20
-damping_strength = 0.030
+# Sponge parameters
+damping_width = 50
+max_damping = 0.02
+damping_exponent = 2
+
+# Diagnostics
+show_damping_profile = True
+print_energy_interval = 50
+
+# A narrower color range makes weak late-time reflections visible.
+# The initial Gaussian will appear saturated, but that is acceptable while diagnosing boundary reflections.
+display_limit = 0.15
 
 
 # ============================================================
-# 4. Stability condition estimate for 2D wave equation
+# 5. Configuration validation
 # ============================================================
 
-courant = c * dt * np.sqrt(1 / dx**2 + 1 / dy**2)
+VALID_BOUNDARIES = {"fixed", "sponge"}
 
-if courant > 1:
+if boundary_type not in VALID_BOUNDARIES:
     raise ValueError(
-        f"Simulation unstable: Courant number = {courant:.3f}. "
-        "Reduce dt or increase dx/dy."
+        f"Unknown boundary type: {boundary_type!r}. "
+        f"Available options: {sorted(VALID_BOUNDARIES)}"
     )
 
-print(f"Courant number: {courant:.3f}")
+if nx < 3 or ny < 3:
+    raise ValueError("The grid must contain at least 3 points per direction.")
+
+if dx <= 0 or dy <= 0:
+    raise ValueError("Grid spacing dx and dy must be positive.")
+
+if c <= 0:
+    raise ValueError("Wave speed c must be positive.")
+
+if dt <= 0:
+    raise ValueError("Time step dt must be positive.")
+
+if steps <= 0:
+    raise ValueError("The number of time steps must be positive.")
+
+if sigma <= 0:
+    raise ValueError("Gaussian width sigma must be positive.")
+
+if damping_width < 1:
+    raise ValueError("damping_width must be at least 1.")
+
+maximum_damping_width = min(nx, ny) // 2
+
+if damping_width >= maximum_damping_width:
+    raise ValueError(
+        f"damping_width must be smaller than {maximum_damping_width} for the current grid."
+    )
+
+if max_damping < 0:
+    raise ValueError("max_damping cannot be negative.")
+
+if damping_exponent <= 0:
+    raise ValueError("damping_exponent must be positive.")
+
+
+# ============================================================
+# 6. CFL stability check
+# ============================================================
+
+courant = c * dt * np.sqrt(1.0 / dx**2 + 1.0 / dy**2)
+
+if courant > 1.0:
+    raise ValueError(
+        f"Simulation unstable: Courant number = {courant:.3f}. Reduce dt or increase dx and/or dy."
+    )
+
+print("Simulation configuration")
+print("------------------------")
+print(f"Grid:               {nx} × {ny}")
+print(f"Courant number:     {courant:.3f}")
 print(f"Boundary condition: {boundary_type}")
 
-
-# ============================================================
-# 5. Wave fields
-# ============================================================
-
-u_prev = np.zeros((nx, ny))  # u at time t-dt
-u_curr = np.zeros((nx, ny))  # u at time t
-u_next = np.zeros((nx, ny))  # u at time t+dt
+if boundary_type == "sponge":
+    print(f"Damping width:      {damping_width}")
+    print(f"Maximum damping:    {max_damping}")
+    print(f"Damping exponent:   {damping_exponent}")
 
 
 # ============================================================
-# 6. Initial Gaussian pulse
+# 7. Numerical helper functions
 # ============================================================
 
-x0, y0 = nx // 2, ny // 2
-sigma = 8.0
+def apply_fixed_boundaries(field):
+    """
+    Force the outermost grid points to zero.
 
-x = np.arange(nx)
-y = np.arange(ny)
-X, Y = np.meshgrid(x, y, indexing="ij")
+    This is a homogeneous Dirichlet boundary condition:
 
-u_curr = np.exp(-((X - x0) ** 2 + (Y - y0) ** 2) / (2 * sigma**2))
-u_prev = u_curr.copy()
+        u = 0
 
+    For the fixed-boundary case, this produces strong reflection.
 
-# ============================================================
-# 7. Boundary condition functions
-# ============================================================
-
-def apply_fixed_boundaries(u):
-    # Apply fixed zero-value boundary conditions.
-    u[0, :] = 0.0
-    u[-1, :] = 0.0
-    u[:, 0] = 0.0
-    u[:, -1] = 0.0
+    For the sponge case, the outgoing wave should be attenuated before
+    reaching this outer boundary, so the reflected amplitude should be
+    much smaller.
+    """
+    field[0, :] = 0.0
+    field[-1, :] = 0.0
+    field[:, 0] = 0.0
+    field[:, -1] = 0.0
 
 
-def create_damping_mask(nx, ny, damping_width=20, damping_strength=0.015):
-    #Create a damping mask to reduce reflections near the boundaries.
-    #The mask is equal to 1 in the central region and becomes smaller near the edges of the domain.
+def compute_laplacian(field):
+    """
+    Compute the 2D finite-difference Laplacian on interior points.
 
-    mask = np.ones((nx, ny))
+    The second derivatives are approximated using centered differences:
 
-    for i in range(nx):
-        for j in range(ny):
-            distance_to_edge = min(i, j, nx - 1 - i, ny - 1 - j)
+        d²u/dx² ≈ (u[i+1,j] - 2u[i,j] + u[i-1,j]) / dx²
 
-            if distance_to_edge < damping_width:
-                mask[i, j] = np.exp(
-                    -damping_strength * (damping_width - distance_to_edge) ** 2
-                )
-
-    return mask
-
-
-def apply_boundary_condition(u):
-
-    if boundary_type == "fixed":
-        apply_fixed_boundaries(u)
-
-    elif boundary_type == "damped":
-        u *= damping_mask
-        apply_fixed_boundaries(u)
-
-    else:
-        raise ValueError(
-            f"Unknown boundary type: {boundary_type}. "
-            "Use 'fixed' or 'damped'."
-        )
-
-
-# Create damping mask.
-# If the selected boundary type is fixed, this mask is just not used.
-damping_mask = create_damping_mask(
-    nx,
-    ny,
-    damping_width=damping_width,
-    damping_strength=damping_strength,
-)
-
-
-# Apply boundary condition to the initial fields
-apply_boundary_condition(u_curr)
-apply_boundary_condition(u_prev)
-
-
-# ============================================================
-# 8. Helper function: compute one time step
-# ============================================================
-
-def step_wave(u_prev, u_curr):
-
-    #Compute one time step of the 2D scalar wave equation.
-    u_next = np.zeros_like(u_curr)
-    laplacian = np.zeros_like(u_curr)
+        d²u/dy² ≈ (u[i,j+1] - 2u[i,j] + u[i,j-1]) / dy²
+    """
+    laplacian = np.zeros_like(field)
 
     laplacian[1:-1, 1:-1] = (
-        (u_curr[2:, 1:-1] - 2 * u_curr[1:-1, 1:-1] + u_curr[:-2, 1:-1]) / dx**2
+        (
+            field[2:, 1:-1]
+            - 2.0 * field[1:-1, 1:-1]
+            + field[:-2, 1:-1]
+        )
+        / dx**2
         +
-        (u_curr[1:-1, 2:] - 2 * u_curr[1:-1, 1:-1] + u_curr[1:-1, :-2]) / dy**2
+        (
+            field[1:-1, 2:]
+            - 2.0 * field[1:-1, 1:-1]
+            + field[1:-1, :-2]
+        )
+        / dy**2
     )
 
-    u_next[1:-1, 1:-1] = (
-        2 * u_curr[1:-1, 1:-1]
-        - u_prev[1:-1, 1:-1]
-        + (c * dt) ** 2 * laplacian[1:-1, 1:-1]
+    return laplacian
+
+
+def create_gaussian_pulse():
+    """
+    Create the initial 2D Gaussian field distribution.
+    """
+    x = np.arange(nx)
+    y = np.arange(ny)
+
+    X, Y = np.meshgrid(x, y, indexing="ij")
+
+    pulse = np.exp(
+        -(
+            (X - x0) ** 2
+            + (Y - y0) ** 2
+        )
+        / (2.0 * sigma**2)
     )
 
-    apply_boundary_condition(u_next)
+    apply_fixed_boundaries(pulse)
 
-    return u_next
+    return pulse
+
+
+def create_damping_profile():
+    """
+    Create the spatial damping coefficient gamma(x,y).
+
+    The damping coefficient is:
+
+    - zero in the central physical region,
+    - smoothly increasing inside the sponge layer,
+    - equal to approximately max_damping at the outer boundary.
+
+    The profile follows:
+
+        gamma = max_damping * normalized_depth**damping_exponent
+
+    A higher exponent makes the damping begin more gently but increase
+    more strongly near the outer edge.
+    """
+    x_indices = np.arange(nx)
+    y_indices = np.arange(ny)
+
+    distance_x = np.minimum(x_indices, nx - 1 - x_indices)  # Distance to the nearest x-boundary
+    distance_y = np.minimum(y_indices, ny - 1 - y_indices)  # Distance to the nearest y-boundary
+
+    distance_to_edge = np.minimum( # Create a 2D array of distances to the nearest edge
+        distance_x[:, np.newaxis],
+        distance_y[np.newaxis, :],
+    )
+
+    normalized_depth = np.clip(
+        (damping_width - distance_to_edge) / damping_width,
+        0.0,
+        1.0,
+    )
+
+    gamma = max_damping * normalized_depth**damping_exponent
+
+    return gamma
+
+
+def initialize_fields():
+    """
+    Construct u at t = 0 and at t = -dt.
+
+    The initial velocity is assumed to be zero:
+
+        du/dt = 0 at t = 0
+
+    An accurate second-order Taylor expansion is:
+
+        u(-dt) = u(0) + 0.5 * dt² * u_tt(0)
+
+    and because:
+
+        u_tt = c² laplacian(u)
+
+    the previous field is initialized using the initial Laplacian.
+    """
+    current = create_gaussian_pulse()
+    initial_laplacian = compute_laplacian(current)
+
+    previous = current + 0.5 * (c * dt) ** 2 * initial_laplacian
+
+    apply_fixed_boundaries(previous)
+
+    return previous, current
+
+
+def compute_energy(previous, current):
+    """
+    Estimate the total scalar-wave energy in the domain.
+
+    The continuous wave energy density is proportional to:
+
+        0.5 * u_t² + 0.5 * c² * |grad(u)|²
+
+    This diagnostic is useful for comparing boundaries:
+
+    - fixed boundaries should retain most energy in the domain,
+    - sponge boundaries should remove energy as the wave exits.
+
+    The discrete energy is approximate, but it is sufficient for
+    comparing simulations using the same grid and time step.
+    """
+    velocity = (current - previous) / dt
+
+    gradient_x = np.zeros_like(current)
+    gradient_y = np.zeros_like(current)
+
+    gradient_x[1:-1, 1:-1] = (
+        current[2:, 1:-1] - current[:-2, 1:-1]
+    ) / (2.0 * dx)
+
+    gradient_y[1:-1, 1:-1] = (
+        current[1:-1, 2:] - current[1:-1, :-2]
+    ) / (2.0 * dy)
+
+    energy_density = 0.5 * velocity**2 + 0.5 * c**2 * (
+        gradient_x**2 + gradient_y**2
+    )
+
+    return float(np.sum(energy_density) * dx * dy)
 
 
 # ============================================================
-# 9. Set up the plot
+# 8. Create the damping profile
 # ============================================================
 
-fig, ax = plt.subplots()
+if boundary_type == "sponge":
+    damping_profile = create_damping_profile()
+else:
+    damping_profile = np.zeros((nx, ny))
 
-image = ax.imshow(
+print(f"Profile minimum:    {damping_profile.min():.6f}")
+print(f"Profile maximum:    {damping_profile.max():.6f}")
+
+
+# ============================================================
+# 9. Initialize the wave fields
+# ============================================================
+
+u_prev, u_curr = initialize_fields()
+
+
+# ============================================================
+# 10. Time-stepping function
+# ============================================================
+
+def step_wave(previous, current):
+    """
+    Advance the scalar wave equation by one time step.
+
+    Fixed-boundary equation:
+
+        u_tt = c² laplacian(u)
+
+    Sponge equation:
+
+        u_tt + gamma(x,y) * u_t = c² laplacian(u)
+
+    The damped equation is discretized with a centered approximation
+    for both u_tt and u_t.
+    """
+    laplacian = compute_laplacian(current)
+    next_field = np.zeros_like(current)
+
+    if boundary_type == "fixed":
+        next_field[1:-1, 1:-1] = (
+            2.0 * current[1:-1, 1:-1]
+            - previous[1:-1, 1:-1]
+            + (c * dt) ** 2 * laplacian[1:-1, 1:-1]
+        )
+
+    elif boundary_type == "sponge":
+        gamma = damping_profile[1:-1, 1:-1]
+
+        next_field[1:-1, 1:-1] = (
+            2.0 * current[1:-1, 1:-1]
+            - (1.0 - gamma * dt / 2.0)
+            * previous[1:-1, 1:-1]
+            + (c * dt) ** 2
+            * laplacian[1:-1, 1:-1]
+        ) / (1.0 + gamma * dt / 2.0)
+
+    apply_fixed_boundaries(next_field)
+
+    return next_field
+
+
+# ============================================================
+# 11. Diagnostic storage
+# ============================================================
+
+energy_history = [compute_energy(u_prev, u_curr)]
+initial_energy = energy_history[0]
+
+print(f"Initial energy:     {initial_energy:.6f}")
+
+
+# ============================================================
+# 12. Optional damping-profile visualization
+# ============================================================
+
+if boundary_type == "sponge" and show_damping_profile:
+    profile_figure, profile_axis = plt.subplots()
+
+    profile_image = profile_axis.imshow(
+        damping_profile.T,
+        origin="lower",
+        cmap="viridis",
+    )
+
+    profile_axis.set_title(
+        "Sponge damping profile\n"
+        f"width={damping_width}, "
+        f"max={max_damping}, "
+        f"exponent={damping_exponent}"
+    )
+
+    profile_axis.set_xlabel("x grid index")
+    profile_axis.set_ylabel("y grid index")
+
+    profile_figure.colorbar(
+        profile_image,
+        ax=profile_axis,
+        label=r"Damping coefficient $\gamma(x,y)$",
+    )
+
+
+# ============================================================
+# 13. Wave-field animation
+# ============================================================
+
+figure, axis = plt.subplots()
+
+field_image = axis.imshow(
     u_curr.T,
     cmap="RdBu",
-    vmin=-1,
-    vmax=1,
+    vmin=-display_limit,
+    vmax=display_limit,
     origin="lower",
     animated=True,
 )
 
-ax.set_title(f"2D Scalar Wave Equation — Boundary: {boundary_type}")
-ax.set_xlabel("x grid index")
-ax.set_ylabel("y grid index")
+axis.set_xlabel("x grid index")
+axis.set_ylabel("y grid index")
 
-plt.colorbar(image, ax=ax, label="Wave amplitude")
+figure.colorbar(
+    field_image,
+    ax=axis,
+    label="Wave amplitude",
+)
 
-
-# ============================================================
-# 10. Animation update function
-# ============================================================
 
 def update(frame):
+    """
+    Advance the simulation, record energy, and refresh the animation.
+    """
     global u_prev, u_curr
 
     u_next = step_wave(u_prev, u_curr)
 
-    u_prev = u_curr.copy()
-    u_curr = u_next.copy()
+    current_energy = compute_energy(u_curr, u_next)
+    energy_history.append(current_energy)
 
-    image.set_array(u_curr.T)
-    ax.set_title(f"2D Scalar Wave Equation — Boundary: {boundary_type} — Step {frame}")
+    u_prev, u_curr = u_curr, u_next
 
-    return [image]
+    field_image.set_array(u_curr.T)
+
+    relative_energy = current_energy / initial_energy
+
+    axis.set_title(
+        f"2D Scalar Wave Equation — {boundary_type.capitalize()} Boundary\n"
+        f"Step {frame + 1} | "
+        f"Remaining energy: {100.0 * relative_energy:.2f}%"
+    )
+
+    if (
+        frame == 0
+        or (frame + 1) % print_energy_interval == 0
+        or frame == steps - 1
+    ):
+        print(
+            f"Step {frame + 1:4d}: "
+            f"energy = {current_energy:.6f}, "
+            f"remaining = {100.0 * relative_energy:.2f}%"
+        )
+
+    return [field_image]
 
 
 animation = FuncAnimation(
-    fig,
+    figure,
     update,
     frames=steps,
     interval=30,
     blit=False,
+    repeat=False,
 )
+
+plt.show()
+
+
+# ============================================================
+# 14. Energy-history plot
+# ============================================================
+
+energy_array = np.asarray(energy_history)
+relative_energy_history = energy_array / initial_energy
+
+energy_figure, energy_axis = plt.subplots()
+
+energy_axis.plot(
+    np.arange(len(relative_energy_history)),
+    relative_energy_history,
+)
+
+energy_axis.set_title(
+    f"Normalized Wave Energy — {boundary_type.capitalize()} Boundary"
+)
+
+energy_axis.set_xlabel("Time step")
+energy_axis.set_ylabel("Energy / initial energy")
+energy_axis.grid(True)
 
 plt.show()
