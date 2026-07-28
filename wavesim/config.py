@@ -29,11 +29,18 @@ class GridConfig:
 
 @dataclass(frozen=True)
 class TimeConfig:
-    """Time-stepping and homogeneous-medium configuration."""
+    """Time-stepping configuration."""
 
-    wave_speed: float = 1.0
     dt: float = 0.4
     steps: int = 500
+
+
+@dataclass(frozen=True)
+class MaterialConfig:
+    """Configuration for the simulated material."""
+
+    reference_wave_speed: float = 1.0
+    background_refractive_index: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -73,6 +80,7 @@ class VisualizationConfig:
 
     display_limit: float = 0.5
     show_damping_profile: bool = True
+    show_material_profile: bool = True
     print_energy_interval: int = 50
     animation_interval_ms: int = 30
 
@@ -83,6 +91,7 @@ class SimulationConfig:
 
     grid: GridConfig
     time: TimeConfig
+    material: MaterialConfig
     initial_condition: InitialConditionConfig
     source: SourceConfig
     boundary: BoundaryConfig
@@ -96,6 +105,7 @@ def create_default_config() -> SimulationConfig:
     return SimulationConfig(
         grid=grid,
         time=TimeConfig(),
+        material=MaterialConfig(),
         initial_condition=InitialConditionConfig(
             kind="zero",
             x0=grid.nx // 2,
@@ -118,26 +128,48 @@ def create_default_config() -> SimulationConfig:
         visualization=VisualizationConfig(
             display_limit=0.5,
             show_damping_profile=True,
+            show_material_profile=True,
             print_energy_interval=50,
             animation_interval_ms=30,
         ),
     )
 
 
-def compute_courant_number(config: SimulationConfig) -> float:
-    """Return the 2D Courant number for the homogeneous medium."""
+def compute_courant_number(
+    config: SimulationConfig,
+    maximum_wave_speed: float,
+) -> float:
+    """Return the 2D Courant number using the fastest material speed."""
     grid = config.grid
     time = config.time
 
-    return time.wave_speed * time.dt * np.sqrt(
+    return maximum_wave_speed * time.dt * np.sqrt(
         1.0 / grid.dx**2 + 1.0 / grid.dy**2
     )
+
+
+def validate_courant_number(
+    config: SimulationConfig,
+    maximum_wave_speed: float,
+) -> None:
+    """Validate stability using the fastest speed in the domain."""
+    courant = compute_courant_number(
+        config,
+        maximum_wave_speed,
+    )
+
+    if courant > 1.0:
+        raise ValueError(
+            f"Simulation unstable: Courant number = {courant:.3f}. "
+            "Reduce dt or increase dx and/or dy."
+        )
 
 
 def validate_config(config: SimulationConfig) -> None:
     """Validate all simulation settings before allocating fields."""
     grid = config.grid
     time = config.time
+    material = config.material
     initial = config.initial_condition
     source = config.source
     boundary = config.boundary
@@ -169,8 +201,21 @@ def validate_config(config: SimulationConfig) -> None:
     if grid.dx <= 0 or grid.dy <= 0:
         raise ValueError("Grid spacing dx and dy must be positive.")
 
-    if time.wave_speed <= 0:
-        raise ValueError("Wave speed must be positive.")
+    if (
+        not np.isfinite(material.reference_wave_speed)
+        or material.reference_wave_speed <= 0
+    ):
+        raise ValueError(
+            "reference_wave_speed must be finite and positive."
+        )
+
+    if (
+        not np.isfinite(material.background_refractive_index)
+        or material.background_refractive_index <= 0
+    ):
+        raise ValueError(
+            "background_refractive_index must be finite and positive."
+        )
 
     if time.dt <= 0:
         raise ValueError("Time step dt must be positive.")
@@ -240,16 +285,12 @@ def validate_config(config: SimulationConfig) -> None:
         if boundary.damping_exponent <= 0:
             raise ValueError("damping_exponent must be positive.")
 
-    courant = compute_courant_number(config)
 
-    if courant > 1.0:
-        raise ValueError(
-            f"Simulation unstable: Courant number = {courant:.3f}. "
-            "Reduce dt or increase dx and/or dy."
-        )
-
-
-def print_configuration(config: SimulationConfig) -> None:
+def print_configuration(
+    config: SimulationConfig,
+    maximum_wave_speed: float,
+    source_wave_speed: float,
+) -> None:
     """Print the validated configuration and useful diagnostics."""
     grid = config.grid
     time = config.time
@@ -260,7 +301,10 @@ def print_configuration(config: SimulationConfig) -> None:
     print("Simulation configuration")
     print("------------------------")
     print(f"Grid:               {grid.nx} × {grid.ny}")
-    print(f"Courant number:     {compute_courant_number(config):.3f}")
+    print(
+        f"Courant number:     "
+        f"{compute_courant_number(config, maximum_wave_speed):.3f}"
+    )
     print(f"Boundary condition: {boundary.kind}")
 
     if boundary.kind == "sponge":
@@ -276,7 +320,7 @@ def print_configuration(config: SimulationConfig) -> None:
         print(f"Source amplitude:   {source.amplitude}")
         print(f"Source frequency:   {source.frequency}")
 
-        nominal_wavelength = time.wave_speed / source.frequency
+        nominal_wavelength = source_wave_speed / source.frequency
         points_per_wavelength_x = nominal_wavelength / grid.dx
         points_per_wavelength_y = nominal_wavelength / grid.dy
 

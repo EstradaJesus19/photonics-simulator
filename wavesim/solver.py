@@ -10,6 +10,12 @@ from .config import (
     InitialConditionConfig,
     SimulationConfig,
     validate_config,
+    validate_courant_number,
+)
+
+from .materials import (
+    MaterialMap,
+    create_uniform_material_map,
 )
 
 
@@ -102,6 +108,7 @@ def create_damping_profile(
 
 def initialize_fields(
     config: SimulationConfig,
+    material_map: MaterialMap,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Construct the fields at t=-dt and t=0."""
     grid = config.grid
@@ -112,9 +119,13 @@ def initialize_fields(
         current = create_gaussian_pulse(grid, initial)
         initial_laplacian = compute_laplacian(current, grid)
 
-        previous = current + 0.5 * (
-            time.wave_speed * time.dt
-        ) ** 2 * initial_laplacian
+        previous = (
+            current
+            + 0.5
+            * time.dt**2
+            * material_map.wave_speed**2
+            * initial_laplacian
+        )
 
     elif initial.kind == "zero":
         current = create_zero_field(grid)
@@ -133,6 +144,7 @@ def compute_energy(
     previous: np.ndarray,
     current: np.ndarray,
     config: SimulationConfig,
+    material_map: MaterialMap,
 ) -> float:
     """Estimate the total scalar-wave energy in the domain."""
     grid = config.grid
@@ -151,8 +163,12 @@ def compute_energy(
         current[1:-1, 2:] - current[1:-1, :-2]
     ) / (2.0 * grid.dy)
 
-    energy_density = 0.5 * velocity**2 + 0.5 * time.wave_speed**2 * (
-        gradient_x**2 + gradient_y**2
+    energy_density = (
+        0.5 * velocity**2 / material_map.wave_speed**2
+        + 0.5 * (
+            gradient_x**2
+            + gradient_y**2
+        )
     )
 
     return float(np.sum(energy_density) * grid.dx * grid.dy)
@@ -185,20 +201,23 @@ def step_wave(
     previous: np.ndarray,
     current: np.ndarray,
     config: SimulationConfig,
+    material_map: MaterialMap,
     damping_profile: np.ndarray,
 ) -> np.ndarray:
-    """Advance the homogeneous scalar wave equation by one time step."""
+    """Advance the variable-speed scalar wave equation by one time step."""
     time = config.time
     boundary = config.boundary
 
     laplacian = compute_laplacian(current, config.grid)
+    wave_speed = material_map.wave_speed[1:-1, 1:-1]
     next_field = np.zeros_like(current)
 
     if boundary.kind == "fixed":
         next_field[1:-1, 1:-1] = (
             2.0 * current[1:-1, 1:-1]
             - previous[1:-1, 1:-1]
-            + (time.wave_speed * time.dt) ** 2
+            + time.dt**2
+            * wave_speed**2
             * laplacian[1:-1, 1:-1]
         )
 
@@ -209,7 +228,8 @@ def step_wave(
             2.0 * current[1:-1, 1:-1]
             - (1.0 - gamma * time.dt / 2.0)
             * previous[1:-1, 1:-1]
-            + (time.wave_speed * time.dt) ** 2
+            + time.dt**2
+            * wave_speed**2
             * laplacian[1:-1, 1:-1]
         ) / (1.0 + gamma * time.dt / 2.0)
 
@@ -237,6 +257,20 @@ class Wave2DSimulation:
         validate_config(config)
         self.config = config
 
+        self.material_map: MaterialMap = create_uniform_material_map(
+            config.grid,
+            config.material,
+        )
+
+        maximum_wave_speed = float(
+            np.max(self.material_map.wave_speed)
+        )
+
+        validate_courant_number(
+            config,
+            maximum_wave_speed,
+        )
+
         if config.boundary.kind == "sponge":
             self.damping_profile = create_damping_profile(
                 config.grid,
@@ -245,8 +279,16 @@ class Wave2DSimulation:
         else:
             self.damping_profile = np.zeros(config.grid.shape)
 
-        previous, current = initialize_fields(config)
-        initial_energy = compute_energy(previous, current, config)
+        previous, current = initialize_fields(
+            config,
+            self.material_map,
+        )
+        initial_energy = compute_energy(
+            previous,
+            current,
+            config,
+            self.material_map,
+        )
 
         self.state = SimulationState(
             previous=previous,
@@ -274,6 +316,7 @@ class Wave2DSimulation:
             self.state.previous,
             self.state.current,
             self.config,
+            self.material_map,
             self.damping_profile,
         )
 
@@ -284,6 +327,7 @@ class Wave2DSimulation:
             self.state.current,
             next_field,
             self.config,
+            self.material_map,
         )
 
         self.state.previous = self.state.current

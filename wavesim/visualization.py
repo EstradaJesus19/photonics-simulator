@@ -128,13 +128,79 @@ def plot_energy_history(simulation: Wave2DSimulation) -> None:
     plt.show()
 
 
+def add_material_profile_figure(
+    simulation: Wave2DSimulation,
+) -> None:
+    """Create the optional refractive-index-map figure."""
+    config = simulation.config
+
+    if not config.visualization.show_material_profile:
+        return
+
+    refractive_index = (
+        simulation.material_map.refractive_index
+    )
+
+    material_figure, material_axis = plt.subplots()
+
+    material_image = material_axis.imshow(
+        refractive_index.T,
+        origin="lower",
+        cmap="viridis",
+    )
+
+    material_axis.set_title(
+        "Refractive-index map\n"
+        f"minimum={refractive_index.min():.3f}, "
+        f"maximum={refractive_index.max():.3f}"
+    )
+    material_axis.set_xlabel("x grid index")
+    material_axis.set_ylabel("y grid index")
+
+    material_figure.colorbar(
+        material_image,
+        ax=material_axis,
+        label=r"Refractive index $n(x,y)$",
+    )
+
+
 def run_interactive_simulation(
     config: SimulationConfig,
 ) -> Wave2DSimulation:
     """Validate, report, animate, and plot one simulation."""
     simulation = Wave2DSimulation(config)
 
-    print_configuration(config)
+    maximum_wave_speed = float(
+        np.max(simulation.material_map.wave_speed)
+    )
+
+    source_wave_speed = (
+        float(
+            simulation.material_map.wave_speed[
+                config.source.x,
+                config.source.y,
+            ]
+        )
+        if config.source.kind == "point_sine"
+        else maximum_wave_speed
+    )
+
+    print_configuration(
+        config,
+        maximum_wave_speed,
+        source_wave_speed,
+    )
+
+    print(
+        f"Refractive index:   "
+        f"min={simulation.material_map.refractive_index.min():.3f}, "
+        f"max={simulation.material_map.refractive_index.max():.3f}"
+    )
+    print(
+        f"Wave speed:         "
+        f"min={simulation.material_map.wave_speed.min():.3f}, "
+        f"max={simulation.material_map.wave_speed.max():.3f}"
+    )
 
     if config.boundary.kind == "sponge":
         print(
@@ -148,6 +214,8 @@ def run_interactive_simulation(
 
     print(f"Initial energy:     {simulation.initial_energy:.6f}")
 
+
+    add_material_profile_figure(simulation)
     add_damping_profile_figure(simulation)
     animation = create_wave_animation(simulation)
 
