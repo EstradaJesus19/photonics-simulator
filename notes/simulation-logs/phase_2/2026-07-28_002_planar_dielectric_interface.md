@@ -1089,11 +1089,9 @@ A useful field snapshot should be taken around steps 220 to 300. At that
 stage, transmission is established while long-time boundary effects remain
 limited. After the files are saved, they can be included here as:
 
-```md
 ![Planar-interface field](../../../outputs/figures/phase_2/2026-07-28_planar_interface_field.png)
 
 ![Planar-interface energy](../../../outputs/figures/phase_2/2026-07-28_planar_interface_energy.png)
-```
 
 The pending figures do not affect the automated numerical tests, but adding
 them will complete the visual experiment record.
@@ -1198,7 +1196,7 @@ finiteness are checked automatically.
 [x] Shorter transmitted wavelength was observed
 [x] Slower propagation in the higher-index material was observed
 [x] Representative material-map figure saved
-[ ] Representative field and energy figures saved
+[x] Representative field and energy figures saved
 [ ] README updated for Phase 2.3
 [ ] Phase 2.3 commit created
 ```
