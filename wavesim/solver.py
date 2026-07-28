@@ -16,6 +16,7 @@ from .config import (
 from .materials import (
     MaterialMap,
     create_uniform_material_map,
+    validate_material_map,
 )
 
 
@@ -253,14 +254,29 @@ class SimulationState:
 class Wave2DSimulation:
     """Own the configuration, precomputed data, and evolving wave state."""
 
-    def __init__(self, config: SimulationConfig):
+    def __init__(
+        self,
+        config: SimulationConfig,
+        material_map: MaterialMap | None = None,
+    ):
         validate_config(config)
         self.config = config
 
-        self.material_map: MaterialMap = create_uniform_material_map(
-            config.grid,
-            config.material,
+        selected_material_map = (
+            create_uniform_material_map(
+                config.grid,
+                config.material,
+            )
+            if material_map is None
+            else material_map
         )
+
+        validate_material_map(
+            selected_material_map,
+            config.grid,
+        )
+
+        self.material_map = selected_material_map
 
         maximum_wave_speed = float(
             np.max(self.material_map.wave_speed)

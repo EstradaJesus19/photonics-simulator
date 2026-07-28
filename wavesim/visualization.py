@@ -5,6 +5,7 @@ import numpy as np
 from matplotlib.animation import FuncAnimation
 
 from .config import SimulationConfig, print_configuration
+from .materials import MaterialMap
 from .solver import Wave2DSimulation
 
 
@@ -61,6 +62,35 @@ def create_wave_animation(
         animated=True,
     )
 
+    refractive_index = (
+        simulation.material_map.refractive_index
+    )
+    unique_refractive_indices = np.unique(refractive_index)
+
+    if unique_refractive_indices.size > 1:
+        interface_levels = 0.5 * (
+            unique_refractive_indices[:-1]
+            + unique_refractive_indices[1:]
+        )
+
+        axis.contour(
+            refractive_index.T,
+            levels=interface_levels,
+            colors="black",
+            linestyles="--",
+            linewidths=1.0,
+        )
+
+        axis.plot(
+            [],
+            [],
+            color="black",
+            linestyle="--",
+            linewidth=1.0,
+            label="Material interface",
+        )
+        axis.legend(loc="upper right")
+
     axis.set_xlabel("x grid index")
     axis.set_ylabel("y grid index")
 
@@ -76,7 +106,7 @@ def create_wave_animation(
 
         field_image.set_array(simulation.state.current.T)
         axis.set_title(
-            "2D Scalar Wave Equation — "
+            "2D E_z Wave Equation - "
             f"{config.boundary.kind.capitalize()} Boundary\n"
             f"Step {simulation.state.step_index} | "
             f"{simulation.energy_status_text()} | "
@@ -105,14 +135,14 @@ def plot_energy_history(simulation: Wave2DSimulation) -> None:
     if simulation.normalize_energy:
         plotted_energy = energy_array / simulation.initial_energy
         energy_axis.set_title(
-            "Normalized Wave Energy — "
+            "Normalized Wave Energy - "
             f"{config.boundary.kind.capitalize()} Boundary"
         )
         energy_axis.set_ylabel("Energy / initial energy")
     else:
         plotted_energy = energy_array
         energy_axis.set_title(
-            "Total Wave Energy — "
+            "Total Wave Energy - "
             f"{config.boundary.kind.capitalize()} Boundary, "
             f"Source: {config.source.kind}"
         )
@@ -166,9 +196,13 @@ def add_material_profile_figure(
 
 def run_interactive_simulation(
     config: SimulationConfig,
+    material_map: MaterialMap | None = None,
 ) -> Wave2DSimulation:
     """Validate, report, animate, and plot one simulation."""
-    simulation = Wave2DSimulation(config)
+    simulation = Wave2DSimulation(
+        config,
+        material_map=material_map,
+    )
 
     maximum_wave_speed = float(
         np.max(simulation.material_map.wave_speed)
@@ -213,7 +247,6 @@ def run_interactive_simulation(
         )
 
     print(f"Initial energy:     {simulation.initial_energy:.6f}")
-
 
     add_material_profile_figure(simulation)
     add_damping_profile_figure(simulation)

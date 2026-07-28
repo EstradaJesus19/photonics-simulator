@@ -10,7 +10,7 @@ FDTD methods.
 
 ## Current status
 
-The project is currently at **Phase 2.2 - Uniform material map**.
+The project is currently at **Phase 2.3 - Planar dielectric interface**.
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -18,9 +18,13 @@ The project is currently at **Phase 2.2 - Uniform material map**.
   intentionally changing its numerical behavior.
 - Phase 2.2 introduced validated refractive-index and wave-speed maps while
   keeping the default domain uniform.
+- Phase 2.3 gave the scalar field an \(E_z\)-polarized interpretation and
+  introduced one grid-aligned planar dielectric interface.
 
-The default Phase 2.2 simulation remains numerically identical to the verified
-Phase 2.1 simulation. No material interface has been introduced yet.
+The default uniform simulation remains numerically identical to the verified
+Phase 2.1 simulation. A separate Phase 2.3 scenario demonstrates qualitative
+reflection, transmission, refraction, and wavelength change at an interface
+between \(n=1.0\) and \(n=1.5\).
 
 ## Governing model
 
@@ -37,9 +41,15 @@ c(x,y)^2
 \right).
 ```
 
-Here:
+For Phase 2.3, the field is interpreted as:
 
-- \(u(x,y,t)\) is a scalar wave field;
+```math
+u(x,y,t)=E_z(x,y,t),
+```
+
+where:
+
+- \(E_z(x,y,t)\) is the out-of-plane electric-field component;
 - \(c(x,y)\) is the local propagation speed;
 - \(x\) and \(y\) are spatial coordinates;
 - \(t\) is time.
@@ -62,10 +72,27 @@ n(x,y) = 1
 c(x,y) = 1
 ```
 
-throughout the domain.
+throughout the default domain.
 
-This remains an abstract scalar model. It must not yet be interpreted as a
-specific electromagnetic field component or as a complete Maxwell solver.
+The selected \(E_z\) model assumes a two-dimensional, isotropic, lossless,
+nondispersive dielectric with spatially constant magnetic permeability. It is
+a reduced second-order electromagnetic model, not a complete vector Maxwell
+FDTD solver.
+
+At an ordinary interface between the selected nonmagnetic dielectrics, the
+continuous model requires:
+
+```math
+E_{z,1}=E_{z,2}
+```
+
+and:
+
+```math
+\frac{\partial E_{z,1}}{\partial n}
+=
+\frac{\partial E_{z,2}}{\partial n}.
+```
 
 ## Numerical method
 
@@ -109,7 +136,9 @@ The current implementation includes:
 - a two-dimensional Cartesian grid;
 - spatial refractive-index and wave-speed arrays;
 - uniform material-map construction;
+- vertical planar-interface material-map construction;
 - validation of material values and array shapes;
+- optional injection of preconstructed material maps;
 - CFL stability validation using the fastest wave speed in the domain;
 - Gaussian and zero-field initial conditions;
 - an optional continuous sinusoidal point source;
@@ -117,9 +146,12 @@ The current implementation includes:
 - sponge absorbing boundaries;
 - animated wave-field visualization;
 - refractive-index-map visualization;
+- material-interface contours on the wave animation;
 - sponge-profile visualization;
 - scalar-wave energy diagnostics;
 - source wavelength and grid-resolution diagnostics;
+- a dedicated planar-interface scenario;
+- headless interface-propagation verification;
 - regression tests that preserve the verified Phase 2.1 results.
 
 ## Project architecture
@@ -136,9 +168,11 @@ photonics-simulator/
 |   `-- visualization.py
 |-- simulations/
 |   |-- __init__.py
-|   `-- wave2d_basic.py
+|   |-- wave2d_basic.py
+|   `-- wave2d_planar_interface.py
 |-- tests/
 |   |-- test_materials.py
+|   |-- test_planar_interface_scenario.py
 |   `-- test_phase2_1_regression.py
 |-- notes/
 |   |-- mathematics/
@@ -163,6 +197,7 @@ photonics-simulator/
 
 - `MaterialMap`;
 - uniform material-map construction;
+- planar-interface material-map construction;
 - material-array validation.
 
 `wavesim/solver.py`
@@ -173,7 +208,8 @@ photonics-simulator/
 - boundary handling;
 - damping-profile construction;
 - energy calculation;
-- simulation state and time stepping.
+- simulation state and time stepping;
+- validation and use of optionally supplied material maps.
 
 The solver does not depend on Matplotlib and can be used in tests or future
 headless workflows.
@@ -181,6 +217,7 @@ headless workflows.
 `wavesim/visualization.py`
 
 - material and damping profile figures;
+- material-interface contours;
 - wave animation;
 - energy-history plotting;
 - the interactive simulation workflow.
@@ -189,6 +226,12 @@ headless workflows.
 
 - a thin executable entry point that creates the default configuration and
   launches the interactive workflow.
+
+`simulations/wave2d_planar_interface.py`
+
+- a headless-compatible scenario constructor;
+- a \(240\times160\) interface experiment;
+- a thin interactive entry point for the Phase 2.3 simulation.
 
 The intended dependency direction is
 
@@ -277,6 +320,74 @@ Boundary
     maximum damping = 0.02
     damping exponent = 2
 ```
+
+## Material maps
+
+### Uniform map
+
+The default simulation constructs a uniform map:
+
+```python
+from wavesim.materials import create_uniform_material_map
+
+material_map = create_uniform_material_map(
+    config.grid,
+    config.material,
+)
+```
+
+Every cell receives:
+
+```math
+n(x,y)=n_{\mathrm{background}}
+```
+
+and:
+
+```math
+c(x,y)=\frac{c_{\mathrm{ref}}}{n(x,y)}.
+```
+
+### Planar interface
+
+Phase 2.3 adds:
+
+```python
+from wavesim.materials import (
+    create_planar_interface_material_map,
+)
+
+material_map = create_planar_interface_material_map(
+    config.grid,
+    config.material,
+    interface_index=120,
+    right_refractive_index=1.5,
+)
+```
+
+The material convention is:
+
+```python
+refractive_index[:interface_index, :] = n_left
+refractive_index[interface_index:, :] = n_right
+```
+
+The interface lies between x indices `interface_index - 1` and
+`interface_index`. The left material uses the configured background index.
+
+Prepared maps can be supplied explicitly:
+
+```python
+from wavesim.solver import Wave2DSimulation
+
+simulation = Wave2DSimulation(
+    config,
+    material_map=material_map,
+)
+```
+
+When no map is supplied, `Wave2DSimulation` constructs the default uniform map.
+Every active map is validated before field allocation and CFL validation.
 
 ## Initial conditions
 
@@ -390,7 +501,8 @@ The program raises an error when the configured time step is unstable.
 
 ## Energy diagnostic
 
-For the selected variable-speed scalar equation, the implemented diagnostic is
+For the selected second-order \(E_z\) equation, the implemented mathematical
+wave-energy diagnostic is
 
 ```math
 E
@@ -420,6 +532,22 @@ so the program plots absolute total energy \(E(t)\).
 The diagnostic is primarily intended for comparisons between simulations that
 use compatible numerical parameters.
 
+It is not the complete instantaneous Maxwell energy:
+
+```math
+E_{\mathrm{EM}}
+=
+\int
+\left[
+\frac{1}{2}\varepsilon|\mathbf{E}|^2
++
+\frac{1}{2}\mu|\mathbf{H}|^2
+\right]
+dA,
+```
+
+because the current solver does not explicitly store \(H_x\) and \(H_y\).
+
 ## Requirements
 
 - Python 3;
@@ -444,10 +572,16 @@ pip install -r requirements.txt
 
 Run commands from the repository root.
 
-Activate the virtual environment, then execute:
+Activate the virtual environment, then run the default uniform simulation:
 
 ```powershell
 python -m simulations.wave2d_basic
+```
+
+Run the Phase 2.3 planar-interface scenario with:
+
+```powershell
+python -m simulations.wave2d_planar_interface
 ```
 
 Module execution is required because `simulations` imports the reusable
@@ -466,6 +600,65 @@ The interactive workflow:
 7. animates the wave field;
 8. displays the energy history after the animation closes.
 
+### Planar-interface scenario
+
+The Phase 2.3 scenario uses:
+
+```text
+Grid
+    nx = 240
+    ny = 160
+    dt = 0.4
+    steps = 600
+
+Material 1
+    n_1 = 1.0
+    c_1 = 1.0
+
+Material 2
+    n_2 = 1.5
+    c_2 = 0.667
+
+Geometry
+    vertical interface at x index 120
+
+Source
+    position = (60, 80)
+    frequency = 0.05
+
+Boundary
+    kind = sponge
+    damping width = 25
+```
+
+The source frequency gives:
+
+```math
+\lambda_1=20
+```
+
+and:
+
+```math
+\lambda_2\approx13.33,
+```
+
+so both materials remain above the ten-points-per-wavelength guideline.
+
+The material map is:
+
+![Phase 2.3 planar-interface material map](outputs/figures/phase_2/2026-07-28_planar_interface_material_map.png)
+
+The interactive result shows qualitative:
+
+- reflection into the \(n=1.0\) material;
+- transmission into the \(n=1.5\) material;
+- shorter wavelength and slower propagation in the higher-index material;
+- refraction of non-normal parts of the circular wavefront.
+
+The point source reaches the interface over many incidence angles, so this
+scenario is not used to measure Fresnel coefficients quantitatively.
+
 ## Running the tests
 
 From the repository root:
@@ -477,13 +670,24 @@ python -m unittest discover -s tests -v
 The tests cover:
 
 - default and non-unit uniform materials;
+- planar-interface material construction and validation;
 - material ownership by the simulation;
+- optional supplied-map integration;
 - spatial wave-speed use during time stepping;
 - material-aware energy calculation;
 - CFL validation using the maximum material speed;
 - invalid configuration values;
 - invalid material shapes and values;
+- complete planar-scenario configuration;
+- headless propagation across the interface;
+- finite fields and energy during the interface smoke test;
 - the complete verified Phase 2.1 numerical regression.
+
+The current suite contains:
+
+```text
+26 tests
+```
 
 For the default 500-step simulation, the protected energy checkpoints are
 approximately:
@@ -498,21 +702,25 @@ Step 500:  70.13486394160974
 
 ## Current limitations
 
-The current Phase 2.2 model:
+The current Phase 2.3 model:
 
-- is scalar rather than vector electromagnetic;
-- constructs only uniform material maps;
-- does not yet contain material interfaces or dielectric geometries;
-- has not selected a TE or TM electromagnetic interpretation;
-- should not yet be used to claim quantitatively accurate Fresnel behavior;
+- evolves only the \(E_z\) field rather than the full Maxwell field set;
+- supports only one vertical, grid-aligned planar interface;
+- does not yet include rectangular or reusable general geometries;
+- assumes spatially constant magnetic permeability;
+- models only lossless, nondispersive dielectrics;
 - uses normalized simulation units;
 - uses a localized single-cell source;
+- supports qualitative but not quantitative Fresnel analysis;
 - uses a sponge layer rather than a PML;
-- does not model material dispersion or loss.
+- does not store \(H_x\) or \(H_y\);
+- uses a scalar wave-equation energy diagnostic rather than complete
+  electromagnetic energy;
+- does not save simulation results automatically.
 
-Before implementing or quantitatively interpreting a discontinuous interface,
-the project must document the precise variable-coefficient PDE, its physical
-meaning, and its implied interface conditions.
+The point source emits circular waves over many incidence angles. A controlled
+line, beam, or plane-wave-like source is required before quantitative
+reflection and transmission measurements are appropriate.
 
 ## Documentation
 
@@ -526,6 +734,14 @@ notes/simulation-logs/
 
 Simulation logs record parameter choices, numerical changes, tests, observed
 behavior, limitations, and future work.
+
+The Phase 2 material and interface documentation includes:
+
+```text
+notes/physics/02_ez_dielectric_interface_model.md
+notes/simulation-logs/phase_2/2026-07-28_001_uniform_material_map.md
+notes/simulation-logs/phase_2/2026-07-28_002_planar_dielectric_interface.md
+```
 
 ## Roadmap
 
@@ -543,7 +759,7 @@ behavior, limitations, and future work.
 
 - [x] Phase 2.1: Modular refactor
 - [x] Phase 2.2: Uniform material map
-- [ ] Phase 2.3: Planar material interface
+- [x] Phase 2.3: Planar dielectric interface
 - [ ] Phase 2.4: Rectangular dielectric region
 - [ ] Phase 2.5: Reusable geometry functions
 - [ ] Phase 2.6: Phase validation

@@ -13,6 +13,7 @@ from wavesim.config import (
 )
 from wavesim.materials import (
     MaterialMap,
+    create_planar_interface_material_map,
     create_uniform_material_map,
     validate_material_map,
 )
@@ -21,6 +22,7 @@ from wavesim.solver import (
     compute_energy,
     step_wave,
 )
+
 
 class UniformMaterialMapTest(unittest.TestCase):
     """Verify construction of uniform material maps."""
@@ -171,6 +173,144 @@ class UniformMaterialMapTest(unittest.TestCase):
             Wave2DSimulation(unstable_config)
 
 
+class PlanarInterfaceMaterialMapTest(unittest.TestCase):
+    """Verify construction of a vertical planar material interface."""
+
+    def setUp(self) -> None:
+        self.grid = GridConfig(nx=6, ny=4)
+        self.material = MaterialConfig(
+            reference_wave_speed=1.0,
+            background_refractive_index=1.0,
+        )
+
+    def test_interface_regions_and_wave_speeds(self) -> None:
+        material_map = create_planar_interface_material_map(
+            self.grid,
+            self.material,
+            interface_index=3,
+            right_refractive_index=1.5,
+        )
+
+        self.assertEqual(
+            material_map.refractive_index.shape,
+            self.grid.shape,
+        )
+        self.assertEqual(
+            material_map.wave_speed.shape,
+            self.grid.shape,
+        )
+        np.testing.assert_array_equal(
+            material_map.refractive_index[:3, :],
+            np.ones((3, self.grid.ny)),
+        )
+        np.testing.assert_array_equal(
+            material_map.refractive_index[3:, :],
+            np.full((3, self.grid.ny), 1.5),
+        )
+        np.testing.assert_array_equal(
+            material_map.wave_speed[:3, :],
+            np.ones((3, self.grid.ny)),
+        )
+        np.testing.assert_allclose(
+            material_map.wave_speed[3:, :],
+            np.full((3, self.grid.ny), 1.0 / 1.5),
+        )
+
+    def test_interface_index_must_leave_cells_on_both_sides(
+        self,
+    ) -> None:
+        for interface_index in (0, self.grid.nx):
+            with self.subTest(interface_index=interface_index):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "at least one x cell",
+                ):
+                    create_planar_interface_material_map(
+                        self.grid,
+                        self.material,
+                        interface_index=interface_index,
+                        right_refractive_index=1.5,
+                    )
+
+    def test_interface_index_must_be_an_integer(self) -> None:
+        with self.assertRaisesRegex(TypeError, "integer"):
+            create_planar_interface_material_map(
+                self.grid,
+                self.material,
+                interface_index=2.5,
+                right_refractive_index=1.5,
+            )
+
+    def test_right_refractive_index_must_be_valid(self) -> None:
+        for right_refractive_index in (
+            0.0,
+            -1.0,
+            np.nan,
+            np.inf,
+        ):
+            with self.subTest(
+                right_refractive_index=right_refractive_index,
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "finite and positive",
+                ):
+                    create_planar_interface_material_map(
+                        self.grid,
+                        self.material,
+                        interface_index=3,
+                        right_refractive_index=right_refractive_index,
+                    )
+
+    def test_simulation_accepts_planar_material_map(self) -> None:
+        config = create_default_config()
+
+        material_map = create_planar_interface_material_map(
+            config.grid,
+            config.material,
+            interface_index=75,
+            right_refractive_index=1.5,
+        )
+
+        simulation = Wave2DSimulation(
+            config,
+            material_map=material_map,
+        )
+
+        self.assertIs(simulation.material_map, material_map)
+        self.assertTrue(
+            np.all(
+                simulation.material_map.refractive_index[:75, :]
+                == 1.0
+            )
+        )
+        self.assertTrue(
+            np.all(
+                simulation.material_map.refractive_index[75:, :]
+                == 1.5
+            )
+        )
+
+    def test_supplied_map_controls_cfl_validation(self) -> None:
+        config = create_default_config()
+
+        fast_material_map = create_planar_interface_material_map(
+            config.grid,
+            config.material,
+            interface_index=75,
+            right_refractive_index=0.5,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Courant number",
+        ):
+            Wave2DSimulation(
+                config,
+                material_map=fast_material_map,
+            )
+
+
 class MaterialConfigValidationTest(unittest.TestCase):
     """Verify rejection of invalid material settings."""
 
@@ -199,6 +339,7 @@ class MaterialConfigValidationTest(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             validate_config(invalid_config)
+
 
 class MaterialMapValidationTest(unittest.TestCase):
     """Verify rejection of invalid material arrays."""

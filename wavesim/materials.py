@@ -80,3 +80,56 @@ def create_uniform_material_map(
     validate_material_map(material_map, grid)
     return material_map
 
+
+def create_planar_interface_material_map(
+    grid: GridConfig,
+    material: MaterialConfig,
+    interface_index: int,
+    right_refractive_index: float,
+) -> MaterialMap:
+    """Create a vertical interface between uniform left and right media.
+
+    The background refractive index fills cells before ``interface_index``.
+    The right refractive index fills cells from ``interface_index`` onward,
+    so the interface lies between x indices ``interface_index - 1`` and
+    ``interface_index``.
+    """
+    if isinstance(interface_index, bool) or not isinstance(
+        interface_index,
+        (int, np.integer),
+    ):
+        raise TypeError("interface_index must be an integer.")
+
+    if not 1 <= interface_index < grid.nx:
+        raise ValueError(
+            "interface_index must leave at least one x cell "
+            "on each side of the interface."
+        )
+
+    if (
+        not np.isfinite(right_refractive_index)
+        or right_refractive_index <= 0
+    ):
+        raise ValueError(
+            "right_refractive_index must be finite and positive."
+        )
+
+    refractive_index = np.full(
+        grid.shape,
+        material.background_refractive_index,
+        dtype=float,
+    )
+    refractive_index[interface_index:, :] = right_refractive_index
+
+    wave_speed = (
+        material.reference_wave_speed / refractive_index
+    )
+
+    material_map = MaterialMap(
+        refractive_index=refractive_index,
+        wave_speed=wave_speed,
+    )
+
+    validate_material_map(material_map, grid)
+    return material_map
+
