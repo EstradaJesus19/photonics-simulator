@@ -1077,24 +1077,13 @@ The image confirms:
 - a vertical interface at the intended position;
 - minimum and maximum indices of 1.0 and 1.5.
 
-The field and energy figures have not yet been saved. Their recommended output
-locations are:
-
-```text
-outputs/figures/phase_2/2026-07-28_planar_interface_field.png
-outputs/figures/phase_2/2026-07-28_planar_interface_energy.png
-```
-
-A useful field snapshot should be taken around steps 220 to 300. At that
-stage, transmission is established while long-time boundary effects remain
-limited. After the files are saved, they can be included here as:
-
 ![Planar-interface field](../../../outputs/figures/phase_2/2026-07-28_planar_interface_field.png)
+
+Figure 2. Final field for the Phase 2.3 scenario. The dashed line marks the planar dielectric interface. The higher-index region shows slower propagation and a shorter wavelength.
 
 ![Planar-interface energy](../../../outputs/figures/phase_2/2026-07-28_planar_interface_energy.png)
 
-The pending figures do not affect the automated numerical tests, but adding
-them will complete the visual experiment record.
+Figure 3. Total scalar-wave energy during continuous excitation. Energy rises because the source continuously injects energy while the sponge removes part of the outgoing field.
 
 ---
 
@@ -1197,12 +1186,11 @@ finiteness are checked automatically.
 [x] Slower propagation in the higher-index material was observed
 [x] Representative material-map figure saved
 [x] Representative field and energy figures saved
-[ ] README updated for Phase 2.3
-[ ] Phase 2.3 commit created
+[x] README updated for Phase 2.3
+[x] Phase 2.3 commit created
 ```
 
-The numerical implementation is complete. The unchecked items are phase
-documentation and repository-closeout tasks.
+All Phase 2.3 implementation, verification, documentation, figure, and repository closeout items are complete.
 
 ---
 

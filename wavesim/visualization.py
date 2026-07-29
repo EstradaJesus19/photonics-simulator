@@ -100,11 +100,7 @@ def create_wave_animation(
         label="Wave amplitude",
     )
 
-    def update(_frame: int) -> list:
-        simulation.advance()
-        simulation.print_progress_if_needed()
-
-        field_image.set_array(simulation.state.current.T)
+    def update_title() -> None:
         axis.set_title(
             "2D E_z Wave Equation - "
             f"{config.boundary.kind.capitalize()} Boundary\n"
@@ -113,11 +109,25 @@ def create_wave_animation(
             f"Source: {config.source.kind}"
         )
 
+    def initialize_animation() -> list:
+        """Draw the initial state without advancing the simulation."""
+        field_image.set_array(simulation.state.current.T)
+        update_title()
+        return [field_image]
+
+    def update(_frame: int) -> list:
+        simulation.advance()
+        simulation.print_progress_if_needed()
+
+        field_image.set_array(simulation.state.current.T)
+        update_title()
+
         return [field_image]
 
     return FuncAnimation(
         figure,
         update,
+        init_func=initialize_animation,
         frames=config.time.steps,
         interval=visualization.animation_interval_ms,
         blit=False,
