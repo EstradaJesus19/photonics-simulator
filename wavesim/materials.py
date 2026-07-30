@@ -133,3 +133,75 @@ def create_planar_interface_material_map(
     validate_material_map(material_map, grid)
     return material_map
 
+
+def create_rectangular_material_map(
+    grid: GridConfig,
+    material: MaterialConfig,
+    x_start: int,
+    x_stop: int,
+    y_start: int,
+    y_stop: int,
+    rectangle_refractive_index: float,
+) -> MaterialMap:
+    """Create a uniform background with one embedded rectangle.
+
+    Rectangle bounds use half-open slices:
+    ``[x_start:x_stop, y_start:y_stop]``.
+    The rectangle must remain strictly inside the grid.
+    """
+    bounds = {
+        "x_start": x_start,
+        "x_stop": x_stop,
+        "y_start": y_start,
+        "y_stop": y_stop,
+    }
+
+    for name, value in bounds.items():
+        if isinstance(value, bool) or not isinstance(
+            value,
+            (int, np.integer),
+        ):
+            raise TypeError(f"{name} must be an integer.")
+
+    if not 1 <= x_start < x_stop <= grid.nx - 1:
+        raise ValueError(
+            "Rectangle x bounds must define a nonempty region "
+            "strictly inside the grid."
+        )
+
+    if not 1 <= y_start < y_stop <= grid.ny - 1:
+        raise ValueError(
+            "Rectangle y bounds must define a nonempty region "
+            "strictly inside the grid."
+        )
+
+    if (
+        not np.isfinite(rectangle_refractive_index)
+        or rectangle_refractive_index <= 0
+    ):
+        raise ValueError(
+            "rectangle_refractive_index must be finite and positive."
+        )
+
+    refractive_index = np.full(
+        grid.shape,
+        material.background_refractive_index,
+        dtype=float,
+    )
+
+    refractive_index[
+        x_start:x_stop,
+        y_start:y_stop,
+    ] = rectangle_refractive_index
+
+    wave_speed = (
+        material.reference_wave_speed / refractive_index
+    )
+
+    material_map = MaterialMap(
+        refractive_index=refractive_index,
+        wave_speed=wave_speed,
+    )
+
+    validate_material_map(material_map, grid)
+    return material_map

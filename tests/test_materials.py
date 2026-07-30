@@ -14,6 +14,7 @@ from wavesim.config import (
 from wavesim.materials import (
     MaterialMap,
     create_planar_interface_material_map,
+    create_rectangular_material_map,
     create_uniform_material_map,
     validate_material_map,
 )
@@ -412,6 +413,115 @@ class MaterialMapValidationTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "positive"):
             validate_material_map(material_map, self.grid)
+
+
+class RectangularMaterialMapTest(unittest.TestCase):
+    """Verify construction of an embedded rectangular material."""
+
+    def setUp(self) -> None:
+        self.grid = GridConfig(nx=8, ny=7)
+        self.material = MaterialConfig(
+            reference_wave_speed=1.0,
+            background_refractive_index=1.0,
+        )
+
+    def test_rectangle_regions_and_wave_speeds(self) -> None:
+        material_map = create_rectangular_material_map(
+            self.grid,
+            self.material,
+            x_start=2,
+            x_stop=6,
+            y_start=2,
+            y_stop=5,
+            rectangle_refractive_index=2.0,
+        )
+
+        expected_index = np.ones(self.grid.shape)
+        expected_index[2:6, 2:5] = 2.0
+
+        expected_speed = np.ones(self.grid.shape)
+        expected_speed[2:6, 2:5] = 0.5
+
+        np.testing.assert_array_equal(
+            material_map.refractive_index,
+            expected_index,
+        )
+        np.testing.assert_array_equal(
+            material_map.wave_speed,
+            expected_speed,
+        )
+
+    def test_rectangle_must_remain_strictly_inside_grid(
+        self,
+    ) -> None:
+        invalid_bounds = (
+            (0, 6, 2, 5),
+            (2, self.grid.nx, 2, 5),
+            (2, 6, 0, 5),
+            (2, 6, 2, self.grid.ny),
+            (4, 4, 2, 5),
+            (5, 4, 2, 5),
+            (2, 6, 4, 4),
+            (2, 6, 5, 4),
+        )
+
+        for bounds in invalid_bounds:
+            with self.subTest(bounds=bounds):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "nonempty region",
+                ):
+                    create_rectangular_material_map(
+                        self.grid,
+                        self.material,
+                        x_start=bounds[0],
+                        x_stop=bounds[1],
+                        y_start=bounds[2],
+                        y_stop=bounds[3],
+                        rectangle_refractive_index=2.0,
+                    )
+
+    def test_rectangle_bounds_must_be_integers(self) -> None:
+        with self.assertRaisesRegex(TypeError, "integer"):
+            create_rectangular_material_map(
+                self.grid,
+                self.material,
+                x_start=2.5,
+                x_stop=6,
+                y_start=2,
+                y_stop=5,
+                rectangle_refractive_index=2.0,
+            )
+
+    def test_rectangle_refractive_index_must_be_valid(
+        self,
+    ) -> None:
+        for rectangle_refractive_index in (
+            0.0,
+            -1.0,
+            np.nan,
+            np.inf,
+        ):
+            with self.subTest(
+                rectangle_refractive_index=(
+                    rectangle_refractive_index
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "finite and positive",
+                ):
+                    create_rectangular_material_map(
+                        self.grid,
+                        self.material,
+                        x_start=2,
+                        x_stop=6,
+                        y_start=2,
+                        y_stop=5,
+                        rectangle_refractive_index=(
+                            rectangle_refractive_index
+                        ),
+                    )
 
 
 if __name__ == "__main__":

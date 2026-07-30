@@ -10,7 +10,7 @@ FDTD methods.
 
 ## Current status
 
-The project is currently at **Phase 2.3 - Planar dielectric interface**.
+The project is currently at **Phase 2.4 - Rectangular dielectric region**.
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -20,11 +20,16 @@ The project is currently at **Phase 2.3 - Planar dielectric interface**.
   keeping the default domain uniform.
 - Phase 2.3 gave the scalar field an \(E_z\)-polarized interpretation and
   introduced one grid-aligned planar dielectric interface.
+- Phase 2.4 introduced a finite rectangular dielectric region with validated
+  half-open geometry bounds.
 
 The default uniform simulation remains numerically identical to the verified
-Phase 2.1 simulation. A separate Phase 2.3 scenario demonstrates qualitative
-reflection, transmission, refraction, and wavelength change at an interface
-between \(n=1.0\) and \(n=1.5\).
+Phase 2.1 simulation. Dedicated Phase 2 scenarios now demonstrate both an
+unbounded planar interface and a finite dielectric object.
+
+The rectangular scenario qualitatively demonstrates reflection, transmission,
+shorter internal wavelength, slower internal propagation, edge diffraction,
+and interference between multiple material boundaries.
 
 ## Governing model
 
@@ -41,7 +46,7 @@ c(x,y)^2
 \right).
 ```
 
-For Phase 2.3, the field is interpreted as:
+From Phase 2.3 onward, the field is interpreted as:
 
 ```math
 u(x,y,t)=E_z(x,y,t),
@@ -151,7 +156,9 @@ The current implementation includes:
 - scalar-wave energy diagnostics;
 - source wavelength and grid-resolution diagnostics;
 - a dedicated planar-interface scenario;
-- headless interface-propagation verification;
+- rectangular dielectric material-map construction with validated half-open bounds;
+- a dedicated rectangular-dielectric scenario;
+- headless propagation verification across planar and rectangular dielectric geometries;
 - regression tests that preserve the verified Phase 2.1 results.
 
 ## Project architecture
@@ -169,11 +176,13 @@ photonics-simulator/
 |-- simulations/
 |   |-- __init__.py
 |   |-- wave2d_basic.py
-|   `-- wave2d_planar_interface.py
+|   |-- wave2d_planar_interface.py
+|   `-- wave2d_rectangular_dielectric.py
 |-- tests/
 |   |-- test_materials.py
+|   |-- test_phase2_1_regression.py
 |   |-- test_planar_interface_scenario.py
-|   `-- test_phase2_1_regression.py
+|   `-- test_rectangular_dielectric_scenario.py
 |-- notes/
 |   |-- mathematics/
 |   |-- physics/
@@ -198,6 +207,7 @@ photonics-simulator/
 - `MaterialMap`;
 - uniform material-map construction;
 - planar-interface material-map construction;
+- rectangular dielectric material-map construction;
 - material-array validation.
 
 `wavesim/solver.py`
@@ -232,6 +242,12 @@ headless workflows.
 - a headless-compatible scenario constructor;
 - a \(240\times160\) interface experiment;
 - a thin interactive entry point for the Phase 2.3 simulation.
+
+`simulations/wave2d_rectangular_dielectric.py`
+
+- a headless-compatible scenario constructor;
+- a \(240\times160\) finite dielectric-object experiment;
+- a thin interactive entry point for the Phase 2.4 simulation.
 
 The intended dependency direction is
 
@@ -374,6 +390,59 @@ refractive_index[interface_index:, :] = n_right
 
 The interface lies between x indices `interface_index - 1` and
 `interface_index`. The left material uses the configured background index.
+
+### Rectangular dielectric
+
+Phase 2.4 adds:
+
+```python
+from wavesim.materials import (
+    create_rectangular_material_map,
+)
+
+material_map = create_rectangular_material_map(
+    config.grid,
+    config.material,
+    x_start=110,
+    x_stop=160,
+    y_start=50,
+    y_stop=110,
+    rectangle_refractive_index=1.5,
+)
+```
+
+Rectangle bounds use the standard NumPy half-open convention:
+
+```python
+refractive_index[
+    x_start:x_stop,
+    y_start:y_stop,
+] = rectangle_refractive_index
+```
+
+Therefore, the example rectangle occupies:
+
+```text
+x indices 110 through 159
+y indices 50 through 109
+```
+
+and has dimensions:
+
+```text
+width = 50 cells
+height = 60 cells
+```
+
+All remaining cells use the configured background refractive index. The
+corresponding wave-speed array is derived using:
+
+```math
+c(x,y)=\frac{c_{\mathrm{ref}}}{n(x,y)}.
+```
+
+The bounds must be integers and must define a nonempty rectangle strictly
+inside the grid. The rectangular refractive index must be finite and positive.
 
 Prepared maps can be supplied explicitly:
 
@@ -584,6 +653,12 @@ Run the Phase 2.3 planar-interface scenario with:
 python -m simulations.wave2d_planar_interface
 ```
 
+Run the Phase 2.4 rectangular-dielectric scenario with:
+
+```powershell
+python -m simulations.wave2d_rectangular_dielectric
+```
+
 Module execution is required because `simulations` imports the reusable
 top-level `wavesim` package. Direct execution such as
 `python simulations\wave2d_basic.py` may not include the repository root in the
@@ -659,6 +734,72 @@ The interactive result shows qualitative:
 The point source reaches the interface over many incidence angles, so this
 scenario is not used to measure Fresnel coefficients quantitatively.
 
+### Rectangular-dielectric scenario
+
+The Phase 2.4 scenario uses:
+
+```text
+Grid
+    nx = 240
+    ny = 160
+    dt = 0.4
+    steps = 600
+
+Background material
+    refractive index = 1.0
+    wave speed = 1.0
+
+Rectangular material
+    refractive index = 1.5
+    wave speed = 0.667
+
+Geometry
+    x indices = [110, 160)
+    y indices = [50, 110)
+    width = 50 cells
+    height = 60 cells
+
+Source
+    position = (60, 80)
+    frequency = 0.05
+
+Boundary
+    kind = sponge
+    damping width = 25
+```
+
+The source is horizontally aligned with the center of the rectangle. Both
+materials remain above the ten-points-per-wavelength resolution guideline.
+
+The material map is:
+
+![Phase 2.4 rectangular dielectric material map](outputs/figures/phase_2/2026-07-29_rectangular_dielectric_material_map.png)
+
+A representative field after 600 steps is:
+
+![Phase 2.4 rectangular dielectric field](outputs/figures/phase_2/2026-07-29_rectangular_dielectric_field.png)
+
+The scalar-wave energy history is:
+
+![Phase 2.4 rectangular dielectric energy](outputs/figures/phase_2/2026-07-29_rectangular_dielectric_energy.png)
+
+The interactive result qualitatively shows:
+
+- reflection from the front surface;
+- propagation into and through the higher-index region;
+- shorter wavelength and slower propagation inside the rectangle;
+- transmission through the rear surface;
+- diffraction around the upper and lower edges;
+- internal interference produced by multiple material boundaries.
+
+The energy rises because the continuous source injects energy throughout the
+simulation. Its smooth, bounded behavior over 600 steps provides an additional
+numerical-stability check.
+
+The localized point source produces circular waves over many incidence angles.
+The scenario is therefore intended as a qualitative finite-object scattering
+experiment rather than a quantitative Fresnel measurement.
+
 ## Running the tests
 
 From the repository root:
@@ -671,6 +812,8 @@ The tests cover:
 
 - default and non-unit uniform materials;
 - planar-interface material construction and validation;
+- rectangular material construction and half-open geometry bounds;
+- rejection of invalid rectangle placement and refractive indices;
 - material ownership by the simulation;
 - optional supplied-map integration;
 - spatial wave-speed use during time stepping;
@@ -678,15 +821,18 @@ The tests cover:
 - CFL validation using the maximum material speed;
 - invalid configuration values;
 - invalid material shapes and values;
-- complete planar-scenario configuration;
-- headless propagation across the interface;
-- finite fields and energy during the interface smoke test;
+- complete planar-interface scenario configuration;
+- complete rectangular-dielectric scenario configuration;
+- headless propagation across the planar interface;
+- headless propagation into and beyond the dielectric rectangle;
+- finite fields and energy during both propagation smoke tests;
+- broad protection against numerical runaway;
 - the complete verified Phase 2.1 numerical regression.
 
 The current suite contains:
 
 ```text
-26 tests
+35 tests
 ```
 
 For the default 500-step simulation, the protected energy checkpoints are
@@ -702,11 +848,14 @@ Step 500:  70.13486394160974
 
 ## Current limitations
 
-The current Phase 2.3 model:
+The current Phase 2.4 model:
 
 - evolves only the \(E_z\) field rather than the full Maxwell field set;
-- supports only one vertical, grid-aligned planar interface;
-- does not yet include rectangular or reusable general geometries;
+- provides dedicated helpers for one vertical planar interface and one
+  grid-aligned rectangular dielectric;
+- does not yet provide reusable composition of multiple material geometries;
+- does not support rotated rectangles or curved material boundaries;
+- specifies geometry using grid indices rather than physical coordinates;
 - assumes spatially constant magnetic permeability;
 - models only lossless, nondispersive dielectrics;
 - uses normalized simulation units;
@@ -722,6 +871,9 @@ The point source emits circular waves over many incidence angles. A controlled
 line, beam, or plane-wave-like source is required before quantitative
 reflection and transmission measurements are appropriate.
 
+Reusable geometry composition, multiple objects, and overlap rules are planned
+for Phase 2.5.
+
 ## Documentation
 
 Additional derivations, explanations, and experiment records are stored in:
@@ -735,12 +887,13 @@ notes/simulation-logs/
 Simulation logs record parameter choices, numerical changes, tests, observed
 behavior, limitations, and future work.
 
-The Phase 2 material and interface documentation includes:
+The Phase 2 material and geometry documentation includes:
 
 ```text
 notes/physics/02_ez_dielectric_interface_model.md
 notes/simulation-logs/phase_2/2026-07-28_001_uniform_material_map.md
 notes/simulation-logs/phase_2/2026-07-28_002_planar_dielectric_interface.md
+notes/simulation-logs/phase_2/2026-07-29_003_rectangular_dielectric_region.md
 ```
 
 ## Roadmap
@@ -760,7 +913,7 @@ notes/simulation-logs/phase_2/2026-07-28_002_planar_dielectric_interface.md
 - [x] Phase 2.1: Modular refactor
 - [x] Phase 2.2: Uniform material map
 - [x] Phase 2.3: Planar dielectric interface
-- [ ] Phase 2.4: Rectangular dielectric region
+- [x] Phase 2.4: Rectangular dielectric region
 - [ ] Phase 2.5: Reusable geometry functions
 - [ ] Phase 2.6: Phase validation
 
