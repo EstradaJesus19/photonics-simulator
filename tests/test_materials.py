@@ -13,9 +13,12 @@ from wavesim.config import (
 )
 from wavesim.materials import (
     MaterialMap,
+    create_material_map_from_refractive_index,
+    create_background_refractive_index_array,
     create_planar_interface_material_map,
     create_rectangular_material_map,
     create_uniform_material_map,
+    add_rectangular_region,
     validate_material_map,
 )
 from wavesim.solver import (
@@ -172,6 +175,297 @@ class UniformMaterialMapTest(unittest.TestCase):
             "Courant number",
         ):
             Wave2DSimulation(unstable_config)
+
+
+class ReusableGeometryFunctionTest(unittest.TestCase):
+    """Verify reusable refractive-index geometry operations."""
+
+    def setUp(self) -> None:
+        self.grid = GridConfig(nx=6, ny=5)
+        self.material = MaterialConfig(
+            reference_wave_speed=1.0,
+            background_refractive_index=1.0,
+        )
+
+    def test_background_array_uses_configured_index(
+        self,
+    ) -> None:
+        material = MaterialConfig(
+            reference_wave_speed=1.0,
+            background_refractive_index=1.25,
+        )
+
+        refractive_index = (
+            create_background_refractive_index_array(
+                self.grid,
+                material,
+            )
+        )
+
+        np.testing.assert_array_equal(
+            refractive_index,
+            np.full(self.grid.shape, 1.25),
+        )
+        self.assertTrue(
+            np.issubdtype(
+                refractive_index.dtype,
+                np.floating,
+            )
+        )
+
+    def test_rectangle_returns_copy_and_may_touch_edges(
+        self,
+    ) -> None:
+        background = (
+            create_background_refractive_index_array(
+                self.grid,
+                self.material,
+            )
+        )
+
+        updated = add_rectangular_region(
+            background,
+            self.grid,
+            x_start=0,
+            x_stop=2,
+            y_start=3,
+            y_stop=self.grid.ny,
+            region_refractive_index=1.5,
+        )
+
+        expected = np.ones(self.grid.shape)
+        expected[0:2, 3:self.grid.ny] = 1.5
+
+        np.testing.assert_array_equal(updated, expected)
+        np.testing.assert_array_equal(
+            background,
+            np.ones(self.grid.shape),
+        )
+        self.assertFalse(
+            np.shares_memory(updated, background)
+        )
+
+    def test_later_rectangle_overwrites_overlap(
+        self,
+    ) -> None:
+        background = (
+            create_background_refractive_index_array(
+                self.grid,
+                self.material,
+            )
+        )
+
+        first = add_rectangular_region(
+            background,
+            self.grid,
+            x_start=1,
+            x_stop=5,
+            y_start=1,
+            y_stop=4,
+            region_refractive_index=1.5,
+        )
+        second = add_rectangular_region(
+            first,
+            self.grid,
+            x_start=3,
+            x_stop=self.grid.nx,
+            y_start=2,
+            y_stop=self.grid.ny,
+            region_refractive_index=2.0,
+        )
+
+        expected_first = np.ones(self.grid.shape)
+        expected_first[1:5, 1:4] = 1.5
+
+        expected_second = expected_first.copy()
+        expected_second[
+            3:self.grid.nx,
+            2:self.grid.ny,
+        ] = 2.0
+
+        np.testing.assert_array_equal(
+            first,
+            expected_first,
+        )
+        np.testing.assert_array_equal(
+            second,
+            expected_second,
+        )
+        self.assertFalse(np.shares_memory(second, first))
+
+    def test_general_rectangle_bounds_are_validated(
+        self,
+    ) -> None:
+        background = np.ones(self.grid.shape)
+
+        invalid_bounds = (
+            (-1, 2, 1, 3),
+            (1, self.grid.nx + 1, 1, 3),
+            (2, 2, 1, 3),
+            (3, 2, 1, 3),
+            (1, 3, -1, 2),
+            (1, 3, 1, self.grid.ny + 1),
+            (1, 3, 2, 2),
+            (1, 3, 3, 2),
+        )
+
+        for bounds in invalid_bounds:
+            with self.subTest(bounds=bounds):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "nonempty region",
+                ):
+                    add_rectangular_region(
+                        background,
+                        self.grid,
+                        x_start=bounds[0],
+                        x_stop=bounds[1],
+                        y_start=bounds[2],
+                        y_stop=bounds[3],
+                        region_refractive_index=1.5,
+                    )
+
+    def test_general_rectangle_bounds_must_be_integers(
+        self,
+    ) -> None:
+        background = np.ones(self.grid.shape)
+
+        for invalid_x_start in (1.5, True):
+            with self.subTest(
+                invalid_x_start=invalid_x_start,
+            ):
+                with self.assertRaisesRegex(
+                    TypeError,
+                    "integer",
+                ):
+                    add_rectangular_region(
+                        background,
+                        self.grid,
+                        x_start=invalid_x_start,
+                        x_stop=3,
+                        y_start=1,
+                        y_stop=3,
+                        region_refractive_index=1.5,
+                    )
+
+    def test_general_rectangle_index_is_validated(
+        self,
+    ) -> None:
+        background = np.ones(self.grid.shape)
+
+        for invalid_index in (
+            0.0,
+            -1.0,
+            np.nan,
+            np.inf,
+        ):
+            with self.subTest(invalid_index=invalid_index):
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "finite and positive",
+                ):
+                    add_rectangular_region(
+                        background,
+                        self.grid,
+                        x_start=1,
+                        x_stop=3,
+                        y_start=1,
+                        y_stop=3,
+                        region_refractive_index=invalid_index,
+                    )
+
+
+class MaterialMapFinalizationTest(unittest.TestCase):
+    """Verify finalization of completed refractive-index arrays."""
+
+    def setUp(self) -> None:
+        self.grid = GridConfig(nx=4, ny=3)
+        self.material = MaterialConfig(
+            reference_wave_speed=2.0,
+            background_refractive_index=1.0,
+        )
+
+    def test_wave_speed_is_derived_from_defensive_float_copy(
+        self,
+    ) -> None:
+        source_index = np.ones(
+            self.grid.shape,
+            dtype=int,
+        )
+        source_index[1:3, 1:] = 2
+
+        expected_index = source_index.astype(float)
+        expected_speed = 2.0 / expected_index
+
+        material_map = (
+            create_material_map_from_refractive_index(
+                self.grid,
+                self.material,
+                source_index,
+            )
+        )
+
+        np.testing.assert_array_equal(
+            material_map.refractive_index,
+            expected_index,
+        )
+        np.testing.assert_allclose(
+            material_map.wave_speed,
+            expected_speed,
+        )
+
+        self.assertTrue(
+            np.issubdtype(
+                material_map.refractive_index.dtype,
+                np.floating,
+            )
+        )
+        self.assertFalse(
+            np.shares_memory(
+                material_map.refractive_index,
+                source_index,
+            )
+        )
+
+        source_index[:, :] = 4
+
+        np.testing.assert_array_equal(
+            material_map.refractive_index,
+            expected_index,
+        )
+
+    def test_incorrect_shape_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ValueError, "shape"):
+            create_material_map_from_refractive_index(
+                self.grid,
+                self.material,
+                np.ones((3, 3)),
+            )
+
+    def test_invalid_refractive_indices_are_rejected(
+        self,
+    ) -> None:
+        invalid_values = (
+            (0.0, "positive"),
+            (-1.0, "positive"),
+            (np.nan, "finite"),
+            (np.inf, "finite"),
+        )
+
+        for value, expected_message in invalid_values:
+            with self.subTest(value=value):
+                refractive_index = np.ones(self.grid.shape)
+                refractive_index[1, 1] = value
+
+                with self.assertRaisesRegex(
+                    ValueError,
+                    expected_message,
+                ):
+                    create_material_map_from_refractive_index(
+                        self.grid,
+                        self.material,
+                        refractive_index,
+                    )
 
 
 class PlanarInterfaceMaterialMapTest(unittest.TestCase):

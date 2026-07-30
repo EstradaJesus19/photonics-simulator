@@ -15,19 +15,42 @@ class MaterialMap:
     wave_speed: np.ndarray
 
 
+def validate_refractive_index_array(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+) -> None:
+    """Validate one refractive-index array."""
+    expected_shape = grid.shape
+
+    if refractive_index.shape != expected_shape:
+        raise ValueError(
+            "Refractive-index map must have shape "
+            f"{expected_shape}, received "
+            f"{refractive_index.shape}."
+        )
+
+    if not np.all(np.isfinite(refractive_index)):
+        raise ValueError(
+            "Refractive-index map must contain only finite values."
+        )
+
+    if np.any(refractive_index <= 0):
+        raise ValueError(
+            "All refractive-index values must be positive."
+        )
+
+
 def validate_material_map(
     material_map: MaterialMap,
     grid: GridConfig,
 ) -> None:
     """Validate material-array shapes and numerical values."""
-    expected_shape = grid.shape
+    validate_refractive_index_array(
+        material_map.refractive_index,
+        grid,
+    )
 
-    if material_map.refractive_index.shape != expected_shape:
-        raise ValueError(
-            "Refractive-index map must have shape "
-            f"{expected_shape}, received "
-            f"{material_map.refractive_index.shape}."
-        )
+    expected_shape = grid.shape
 
     if material_map.wave_speed.shape != expected_shape:
         raise ValueError(
@@ -36,19 +59,9 @@ def validate_material_map(
             f"{material_map.wave_speed.shape}."
         )
 
-    if not np.all(np.isfinite(material_map.refractive_index)):
-        raise ValueError(
-            "Refractive-index map must contain only finite values."
-        )
-
     if not np.all(np.isfinite(material_map.wave_speed)):
         raise ValueError(
             "Wave-speed map must contain only finite values."
-        )
-
-    if np.any(material_map.refractive_index <= 0):
-        raise ValueError(
-            "All refractive-index values must be positive."
         )
 
     if np.any(material_map.wave_speed <= 0):
@@ -57,28 +70,147 @@ def validate_material_map(
         )
 
 
-def create_uniform_material_map(
+def create_material_map_from_refractive_index(
     grid: GridConfig,
     material: MaterialConfig,
+    refractive_index: np.ndarray,
 ) -> MaterialMap:
-    """Create a uniform material map from the material configuration."""
+    """Create a validated material map from a completed index array."""
+    refractive_index_copy = np.array(
+        refractive_index,
+        dtype=float,
+        copy=True,
+    )
+
+    validate_refractive_index_array(
+        refractive_index_copy,
+        grid,
+    )
+
+    wave_speed = (
+        material.reference_wave_speed
+        / refractive_index_copy
+    )
+
+    material_map = MaterialMap(
+        refractive_index=refractive_index_copy,
+        wave_speed=wave_speed,
+    )
+
+    validate_material_map(material_map, grid)
+    return material_map
+
+
+def create_background_refractive_index_array(
+    grid: GridConfig,
+    material: MaterialConfig,
+) -> np.ndarray:
+    """Create a validated background refractive-index array."""
     refractive_index = np.full(
         grid.shape,
         material.background_refractive_index,
         dtype=float,
     )
 
-    wave_speed = (
-        material.reference_wave_speed / refractive_index
+    validate_refractive_index_array(
+        refractive_index,
+        grid,
     )
 
-    material_map = MaterialMap(
-        refractive_index=refractive_index,
-        wave_speed=wave_speed,
+    return refractive_index
+
+
+def add_rectangular_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    x_start: int,
+    x_stop: int,
+    y_start: int,
+    y_stop: int,
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with one rectangular region applied.
+
+    Bounds use half-open NumPy slices. Unlike the dedicated embedded
+    rectangle constructor, this general operation may touch a grid edge.
+    A later operation overwrites earlier values in overlapping cells.
+    """
+    validate_refractive_index_array(
+        refractive_index,
+        grid,
     )
 
-    validate_material_map(material_map, grid)
-    return material_map
+    bounds = {
+        "x_start": x_start,
+        "x_stop": x_stop,
+        "y_start": y_start,
+        "y_stop": y_stop,
+    }
+
+    for name, value in bounds.items():
+        if isinstance(value, bool) or not isinstance(
+            value,
+            (int, np.integer),
+        ):
+            raise TypeError(f"{name} must be an integer.")
+
+    if not 0 <= x_start < x_stop <= grid.nx:
+        raise ValueError(
+            "Rectangle x bounds must define a nonempty region "
+            "inside the grid."
+        )
+
+    if not 0 <= y_start < y_stop <= grid.ny:
+        raise ValueError(
+            "Rectangle y bounds must define a nonempty region "
+            "inside the grid."
+        )
+
+    if (
+        not np.isfinite(region_refractive_index)
+        or region_refractive_index <= 0
+    ):
+        raise ValueError(
+            "region_refractive_index must be finite and positive."
+        )
+
+    updated_refractive_index = np.array(
+        refractive_index,
+        dtype=float,
+        copy=True,
+    )
+
+    updated_refractive_index[
+        x_start:x_stop,
+        y_start:y_stop,
+    ] = region_refractive_index
+
+    validate_refractive_index_array(
+        updated_refractive_index,
+        grid,
+    )
+
+    return updated_refractive_index
+
+
+def create_uniform_material_map(
+    grid: GridConfig,
+    material: MaterialConfig,
+) -> MaterialMap:
+    """Create a uniform material map from the material configuration."""
+    refractive_index = (
+        create_background_refractive_index_array(
+            grid,
+            material,
+        )
+    )
+
+    return create_material_map_from_refractive_index(
+        grid,
+        material,
+        refractive_index,
+    )
 
 
 def create_planar_interface_material_map(
@@ -114,24 +246,28 @@ def create_planar_interface_material_map(
             "right_refractive_index must be finite and positive."
         )
 
-    refractive_index = np.full(
-        grid.shape,
-        material.background_refractive_index,
-        dtype=float,
-    )
-    refractive_index[interface_index:, :] = right_refractive_index
-
-    wave_speed = (
-        material.reference_wave_speed / refractive_index
+    refractive_index = (
+        create_background_refractive_index_array(
+            grid,
+            material,
+        )
     )
 
-    material_map = MaterialMap(
-        refractive_index=refractive_index,
-        wave_speed=wave_speed,
+    refractive_index = add_rectangular_region(
+        refractive_index,
+        grid,
+        x_start=interface_index,
+        x_stop=grid.nx,
+        y_start=0,
+        y_stop=grid.ny,
+        region_refractive_index=right_refractive_index,
     )
 
-    validate_material_map(material_map, grid)
-    return material_map
+    return create_material_map_from_refractive_index(
+        grid,
+        material,
+        refractive_index,
+    )
 
 
 def create_rectangular_material_map(
@@ -183,25 +319,27 @@ def create_rectangular_material_map(
             "rectangle_refractive_index must be finite and positive."
         )
 
-    refractive_index = np.full(
-        grid.shape,
-        material.background_refractive_index,
-        dtype=float,
+    refractive_index = (
+        create_background_refractive_index_array(
+            grid,
+            material,
+        )
     )
 
-    refractive_index[
-        x_start:x_stop,
-        y_start:y_stop,
-    ] = rectangle_refractive_index
-
-    wave_speed = (
-        material.reference_wave_speed / refractive_index
+    refractive_index = add_rectangular_region(
+        refractive_index,
+        grid,
+        x_start=x_start,
+        x_stop=x_stop,
+        y_start=y_start,
+        y_stop=y_stop,
+        region_refractive_index=(
+            rectangle_refractive_index
+        ),
     )
 
-    material_map = MaterialMap(
-        refractive_index=refractive_index,
-        wave_speed=wave_speed,
+    return create_material_map_from_refractive_index(
+        grid,
+        material,
+        refractive_index,
     )
-
-    validate_material_map(material_map, grid)
-    return material_map

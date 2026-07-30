@@ -10,7 +10,7 @@ FDTD methods.
 
 ## Current status
 
-The project is currently at **Phase 2.4 - Rectangular dielectric region**.
+The project is currently at **Phase 2.5 - Reusable geometry functions**.
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -22,14 +22,18 @@ The project is currently at **Phase 2.4 - Rectangular dielectric region**.
   introduced one grid-aligned planar dielectric interface.
 - Phase 2.4 introduced a finite rectangular dielectric region with validated
   half-open geometry bounds.
+- Phase 2.5 separated geometry construction from material finalization and
+  introduced reusable, composable rectangular-region operations.
 
 The default uniform simulation remains numerically identical to the verified
-Phase 2.1 simulation. Dedicated Phase 2 scenarios now demonstrate both an
-unbounded planar interface and a finite dielectric object.
+Phase 2.1 simulation. Dedicated Phase 2 scenarios now demonstrate an unbounded
+planar interface, a finite dielectric object, and a nested three-material
+composite.
 
-The rectangular scenario qualitatively demonstrates reflection, transmission,
-shorter internal wavelength, slower internal propagation, edge diffraction,
-and interference between multiple material boundaries.
+The composite scenario uses ordered geometry operations to place an
+\(n=2.0\) core inside an \(n=1.5\) outer rectangle. It demonstrates explicit
+overlap behavior, multiple interfaces, shorter internal wavelengths, slower
+propagation, scattering, and internal interference.
 
 ## Governing model
 
@@ -142,6 +146,12 @@ The current implementation includes:
 - spatial refractive-index and wave-speed arrays;
 - uniform material-map construction;
 - vertical planar-interface material-map construction;
+- rectangular dielectric material-map construction with validated half-open
+  bounds;
+- reusable background refractive-index construction;
+- non-mutating rectangular-region composition;
+- explicit last-operation-wins overlap behavior;
+- centralized material-map finalization from refractive-index arrays;
 - validation of material values and array shapes;
 - optional injection of preconstructed material maps;
 - CFL stability validation using the fastest wave speed in the domain;
@@ -156,9 +166,10 @@ The current implementation includes:
 - scalar-wave energy diagnostics;
 - source wavelength and grid-resolution diagnostics;
 - a dedicated planar-interface scenario;
-- rectangular dielectric material-map construction with validated half-open bounds;
 - a dedicated rectangular-dielectric scenario;
-- headless propagation verification across planar and rectangular dielectric geometries;
+- a dedicated nested composite-geometry scenario;
+- headless propagation verification across planar, rectangular, and composite
+  dielectric geometries;
 - regression tests that preserve the verified Phase 2.1 results.
 
 ## Project architecture
@@ -176,9 +187,11 @@ photonics-simulator/
 |-- simulations/
 |   |-- __init__.py
 |   |-- wave2d_basic.py
+|   |-- wave2d_composite_geometry.py
 |   |-- wave2d_planar_interface.py
 |   `-- wave2d_rectangular_dielectric.py
 |-- tests/
+|   |-- test_composite_geometry_scenario.py
 |   |-- test_materials.py
 |   |-- test_phase2_1_regression.py
 |   |-- test_planar_interface_scenario.py
@@ -208,6 +221,8 @@ photonics-simulator/
 - uniform material-map construction;
 - planar-interface material-map construction;
 - rectangular dielectric material-map construction;
+- reusable refractive-index geometry operations;
+- defensive material-map finalization;
 - material-array validation.
 
 `wavesim/solver.py`
@@ -248,6 +263,12 @@ headless workflows.
 - a headless-compatible scenario constructor;
 - a \(240\times160\) finite dielectric-object experiment;
 - a thin interactive entry point for the Phase 2.4 simulation.
+
+`simulations/wave2d_composite_geometry.py`
+
+- a headless-compatible scenario constructor;
+- a nested \(n=1.5\) outer region and \(n=2.0\) core;
+- a thin interactive entry point for the Phase 2.5 simulation.
 
 The intended dependency direction is
 
@@ -443,6 +464,67 @@ c(x,y)=\frac{c_{\mathrm{ref}}}{n(x,y)}.
 
 The bounds must be integers and must define a nonempty rectangle strictly
 inside the grid. The rectangular refractive index must be finite and positive.
+
+### Reusable geometry composition
+
+Phase 2.5 separates geometry construction from material finalization:
+
+```python
+from wavesim.materials import (
+    add_rectangular_region,
+    create_background_refractive_index_array,
+    create_material_map_from_refractive_index,
+)
+
+refractive_index = (
+    create_background_refractive_index_array(
+        config.grid,
+        config.material,
+    )
+)
+
+refractive_index = add_rectangular_region(
+    refractive_index,
+    config.grid,
+    x_start=110,
+    x_stop=170,
+    y_start=45,
+    y_stop=115,
+    region_refractive_index=1.5,
+)
+
+refractive_index = add_rectangular_region(
+    refractive_index,
+    config.grid,
+    x_start=130,
+    x_stop=155,
+    y_start=65,
+    y_stop=95,
+    region_refractive_index=2.0,
+)
+
+material_map = create_material_map_from_refractive_index(
+    config.grid,
+    config.material,
+    refractive_index,
+)
+```
+
+Each geometry operation returns a new floating-point array and leaves its input
+unchanged. Rectangles use half-open bounds and may touch a grid edge. When
+regions overlap, the later operation overwrites earlier values in the
+overlapping cells.
+
+Material finalization makes another defensive copy, validates the completed
+refractive-index array, and derives:
+
+```math
+c(x,y)=\frac{c_{\mathrm{ref}}}{n(x,y)}.
+```
+
+The existing uniform, planar-interface, and embedded-rectangle constructors
+remain available. They now use the same reusable construction and finalization
+pipeline internally.
 
 Prepared maps can be supplied explicitly:
 
@@ -659,6 +741,12 @@ Run the Phase 2.4 rectangular-dielectric scenario with:
 python -m simulations.wave2d_rectangular_dielectric
 ```
 
+Run the Phase 2.5 composite-geometry scenario with:
+
+```powershell
+python -m simulations.wave2d_composite_geometry
+```
+
 Module execution is required because `simulations` imports the reusable
 top-level `wavesim` package. Direct execution such as
 `python simulations\wave2d_basic.py` may not include the repository root in the
@@ -800,6 +888,78 @@ The localized point source produces circular waves over many incidence angles.
 The scenario is therefore intended as a qualitative finite-object scattering
 experiment rather than a quantitative Fresnel measurement.
 
+### Composite-geometry scenario
+
+The Phase 2.5 scenario uses:
+
+```text
+Grid
+    nx = 240
+    ny = 160
+    dt = 0.4
+    steps = 600
+
+Background
+    refractive index = 1.0
+    wave speed = 1.0
+
+Outer rectangle
+    x indices = [110, 170)
+    y indices = [45, 115)
+    refractive index = 1.5
+    wave speed = 0.667
+
+Nested core
+    x indices = [130, 155)
+    y indices = [65, 95)
+    refractive index = 2.0
+    wave speed = 0.5
+
+Source
+    position = (60, 80)
+    frequency = 0.05
+
+Boundary
+    kind = sponge
+    damping width = 25
+```
+
+The core is applied after the outer rectangle, so it overwrites the overlapping
+cells. The resulting map contains exactly three refractive indices:
+
+```text
+1.0, 1.5, 2.0
+```
+
+The shortest wavelength occurs in the core:
+
+```math
+\lambda_{\mathrm{core}}
+=
+\frac{0.5}{0.05}
+=
+10,
+```
+
+which meets the ten-points-per-wavelength guideline with unit grid spacing.
+
+The material map is:
+
+![Phase 2.5 composite material map](outputs/figures/phase_2/2026-07-30_composite_geometry_material_map.png)
+
+A representative field after 600 steps is:
+
+![Phase 2.5 composite field](outputs/figures/phase_2/2026-07-30_composite_geometry_field.png)
+
+The scalar-wave energy history is:
+
+![Phase 2.5 composite energy](outputs/figures/phase_2/2026-07-30_composite_geometry_energy.png)
+
+The interactive result shows both material contours, transmission through the
+nested object, wavelength reduction in the higher-index regions, rear-face
+transmission, diffraction, and a more complex internal-interference pattern
+than the single-rectangle scenario.
+
 ## Running the tests
 
 From the repository root:
@@ -814,6 +974,11 @@ The tests cover:
 - planar-interface material construction and validation;
 - rectangular material construction and half-open geometry bounds;
 - rejection of invalid rectangle placement and refractive indices;
+- reusable background-array construction;
+- non-mutating rectangular geometry operations;
+- edge-touching general rectangles;
+- sequential geometry composition and overlap precedence;
+- defensive finalization of completed refractive-index arrays;
 - material ownership by the simulation;
 - optional supplied-map integration;
 - spatial wave-speed use during time stepping;
@@ -823,16 +988,19 @@ The tests cover:
 - invalid material shapes and values;
 - complete planar-interface scenario configuration;
 - complete rectangular-dielectric scenario configuration;
+- complete nested composite-geometry scenario configuration;
 - headless propagation across the planar interface;
 - headless propagation into and beyond the dielectric rectangle;
-- finite fields and energy during both propagation smoke tests;
+- headless propagation through the nested core and beyond the composite object;
+- wavelength-resolution verification for all three composite materials;
+- finite fields and energy during all propagation smoke tests;
 - broad protection against numerical runaway;
 - the complete verified Phase 2.1 numerical regression.
 
 The current suite contains:
 
 ```text
-35 tests
+50 tests
 ```
 
 For the default 500-step simulation, the protected energy checkpoints are
@@ -848,12 +1016,15 @@ Step 500:  70.13486394160974
 
 ## Current limitations
 
-The current Phase 2.4 model:
+The current Phase 2.5 model:
 
 - evolves only the \(E_z\) field rather than the full Maxwell field set;
 - provides dedicated helpers for one vertical planar interface and one
   grid-aligned rectangular dielectric;
-- does not yet provide reusable composition of multiple material geometries;
+- composes multiple axis-aligned rectangular material regions;
+- uses ordered overwrite semantics rather than boolean geometry operations;
+- copies the complete refractive-index array for each geometry operation,
+  favoring clarity and isolation over large-scale construction performance;
 - does not support rotated rectangles or curved material boundaries;
 - specifies geometry using grid indices rather than physical coordinates;
 - assumes spatially constant magnetic permeability;
@@ -871,8 +1042,8 @@ The point source emits circular waves over many incidence angles. A controlled
 line, beam, or plane-wave-like source is required before quantitative
 reflection and transmission measurements are appropriate.
 
-Reusable geometry composition, multiple objects, and overlap rules are planned
-for Phase 2.5.
+Phase 2.6 will validate the complete Phase 2 material infrastructure and define
+the boundary between the current scalar \(E_z\) model and future solver work.
 
 ## Documentation
 
@@ -894,6 +1065,7 @@ notes/physics/02_ez_dielectric_interface_model.md
 notes/simulation-logs/phase_2/2026-07-28_001_uniform_material_map.md
 notes/simulation-logs/phase_2/2026-07-28_002_planar_dielectric_interface.md
 notes/simulation-logs/phase_2/2026-07-29_003_rectangular_dielectric_region.md
+notes/simulation-logs/phase_2/2026-07-30_004_reusable_geometry_functions.md
 ```
 
 ## Roadmap
@@ -914,7 +1086,7 @@ notes/simulation-logs/phase_2/2026-07-29_003_rectangular_dielectric_region.md
 - [x] Phase 2.2: Uniform material map
 - [x] Phase 2.3: Planar dielectric interface
 - [x] Phase 2.4: Rectangular dielectric region
-- [ ] Phase 2.5: Reusable geometry functions
+- [x] Phase 2.5: Reusable geometry functions
 - [ ] Phase 2.6: Phase validation
 
 ### Possible future phases
