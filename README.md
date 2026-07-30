@@ -10,7 +10,7 @@ FDTD methods.
 
 ## Current status
 
-The project is currently at **Phase 2.5 - Reusable geometry functions**.
+**Phase 2 - Material infrastructure is complete and validated.**
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -24,6 +24,9 @@ The project is currently at **Phase 2.5 - Reusable geometry functions**.
   half-open geometry bounds.
 - Phase 2.5 separated geometry construction from material finalization and
   introduced reusable, composable rectangular-region operations.
+- Phase 2.6 defined the stable public API and validated constructor
+  compatibility, material invariants, CFL stability, wavelength resolution,
+  simulation construction, and source-free energy behavior.
 
 The default uniform simulation remains numerically identical to the verified
 Phase 2.1 simulation. Dedicated Phase 2 scenarios now demonstrate an unbounded
@@ -34,6 +37,11 @@ The composite scenario uses ordered geometry operations to place an
 \(n=2.0\) core inside an \(n=1.5\) outer rectangle. It demonstrates explicit
 overlap behavior, multiple interfaces, shorter internal wavelengths, slower
 propagation, scattering, and internal interference.
+
+The completed Phase 2 suite contains 59 tests. All official scenarios satisfy
+the shared material contract, CFL stability, and wavelength-resolution
+requirements. A source-free fixed-boundary composite run keeps the scalar-wave
+energy within a maximum observed deviation of approximately 2.8%.
 
 ## Governing model
 
@@ -170,6 +178,11 @@ The current implementation includes:
 - a dedicated nested composite-geometry scenario;
 - headless propagation verification across planar, rectangular, and composite
   dielectric geometries;
+- an explicit package-level public API;
+- compatibility validation between convenience constructors and reusable
+  composition;
+- a cross-scenario material, CFL, wavelength, and solver validation matrix;
+- source-free composite energy-conservation verification;
 - regression tests that preserve the verified Phase 2.1 results.
 
 ## Project architecture
@@ -194,6 +207,7 @@ photonics-simulator/
 |   |-- test_composite_geometry_scenario.py
 |   |-- test_materials.py
 |   |-- test_phase2_1_regression.py
+|   |-- test_phase2_validation.py
 |   |-- test_planar_interface_scenario.py
 |   `-- test_rectangular_dielectric_scenario.py
 |-- notes/
@@ -207,6 +221,11 @@ photonics-simulator/
 ```
 
 ### Module responsibilities
+
+`wavesim/__init__.py`
+
+- the stable package-level public API;
+- configuration, material, geometry, and solver exports.
 
 `wavesim/config.py`
 
@@ -275,6 +294,30 @@ The intended dependency direction is
 ```text
 config -> materials -> solver -> visualization -> simulation entry points
 ```
+
+### Public package API
+
+Phase 2.6 defines and tests the supported package-level API. Core types and
+material operations can be imported directly:
+
+```python
+from wavesim import (
+    GridConfig,
+    MaterialConfig,
+    MaterialMap,
+    Wave2DSimulation,
+    add_rectangular_region,
+    create_background_refractive_index_array,
+    create_material_map_from_refractive_index,
+    create_planar_interface_material_map,
+    create_rectangular_material_map,
+    create_uniform_material_map,
+)
+```
+
+Existing imports from `wavesim.config`, `wavesim.materials`, and
+`wavesim.solver` remain supported. The public names are listed in
+`wavesim.__all__` and protected by the Phase 2 validation suite.
 
 ## Configuration
 
@@ -989,6 +1032,12 @@ The tests cover:
 - complete planar-interface scenario configuration;
 - complete rectangular-dielectric scenario configuration;
 - complete nested composite-geometry scenario configuration;
+- stable package-level public API exports;
+- equivalence between compatibility constructors and reusable composition;
+- shared material invariants across every official Phase 2 scenario;
+- cross-scenario CFL and wavelength-resolution validation;
+- valid solver construction for every official scenario;
+- source-free fixed-boundary energy behavior across composite materials;
 - headless propagation across the planar interface;
 - headless propagation into and beyond the dielectric rectangle;
 - headless propagation through the nested core and beyond the composite object;
@@ -1000,7 +1049,7 @@ The tests cover:
 The current suite contains:
 
 ```text
-50 tests
+59 tests
 ```
 
 For the default 500-step simulation, the protected energy checkpoints are
@@ -1014,9 +1063,73 @@ Step 250:  50.83918140302646
 Step 500:  70.13486394160974
 ```
 
+## Phase 2 validation
+
+Phase 2.6 validates four official material cases:
+
+```text
+uniform
+planar interface
+embedded rectangle
+nested composite
+```
+
+Every case is checked for:
+
+- array shapes matching the configured grid;
+- finite positive refractive indices and wave speeds;
+- the relationship \(c(x,y)=c_{\mathrm{ref}}/n(x,y)\);
+- CFL stability using the fastest material speed;
+- minimum wavelength resolution using the slowest material speed;
+- successful headless `Wave2DSimulation` construction.
+
+The compatibility tests independently confirm that the uniform, planar, and
+embedded-rectangle convenience constructors produce the same arrays as the
+reusable composition pipeline.
+
+The most restrictive wavelength occurs in the composite core:
+
+```text
+n = 2.0
+c = 0.5
+f = 0.05
+wavelength = 10
+points per wavelength = 10
+```
+
+This exactly meets the configured guideline.
+
+### Source-free energy validation
+
+The composite map is also tested using:
+
+```text
+initial condition = Gaussian
+source = none
+boundary = fixed
+steps = 300
+```
+
+The measured energy result is:
+
+```text
+Initial energy             1.5605401816
+Final energy               1.5568852155
+Final relative energy      0.9976578840
+Maximum absolute drift     0.0279767240
+```
+
+The maximum observed drift is approximately 2.8%, below the protected 5%
+threshold. The diagnostic approximates continuous scalar-wave energy and is
+not claimed to be an exactly conserved discrete or complete Maxwell energy.
+
+All 16 Python source and test files compile successfully, every official
+scenario constructor imports headlessly, and no unresolved `TODO`, `FIXME`,
+`XXX`, or `HACK` markers remain.
+
 ## Current limitations
 
-The current Phase 2.5 model:
+The validated Phase 2 model:
 
 - evolves only the \(E_z\) field rather than the full Maxwell field set;
 - provides dedicated helpers for one vertical planar interface and one
@@ -1042,8 +1155,9 @@ The point source emits circular waves over many incidence angles. A controlled
 line, beam, or plane-wave-like source is required before quantitative
 reflection and transmission measurements are appropriate.
 
-Phase 2.6 will validate the complete Phase 2 material infrastructure and define
-the boundary between the current scalar \(E_z\) model and future solver work.
+These limitations define the boundary of the completed Phase 2 material
+infrastructure. Future geometry, source, boundary, and Maxwell-solver work can
+build on this validated base without expanding Phase 2 further.
 
 ## Documentation
 
@@ -1066,6 +1180,7 @@ notes/simulation-logs/phase_2/2026-07-28_001_uniform_material_map.md
 notes/simulation-logs/phase_2/2026-07-28_002_planar_dielectric_interface.md
 notes/simulation-logs/phase_2/2026-07-29_003_rectangular_dielectric_region.md
 notes/simulation-logs/phase_2/2026-07-30_004_reusable_geometry_functions.md
+notes/simulation-logs/phase_2/2026-07-30_005_phase_2_validation.md
 ```
 
 ## Roadmap
@@ -1087,10 +1202,11 @@ notes/simulation-logs/phase_2/2026-07-30_004_reusable_geometry_functions.md
 - [x] Phase 2.3: Planar dielectric interface
 - [x] Phase 2.4: Rectangular dielectric region
 - [x] Phase 2.5: Reusable geometry functions
-- [ ] Phase 2.6: Phase validation
+- [x] Phase 2.6: Phase validation
 
 ### Possible future phases
 
+- mask-based circles, ellipses, polygons, and rotated geometries;
 - controlled line, beam, or plane-wave sources;
 - conservative interface discretizations;
 - improved absorbing boundaries and PML;
