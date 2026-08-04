@@ -9,7 +9,19 @@ MIN_POINTS_PER_WAVELENGTH = 10.0
 
 VALID_BOUNDARIES = {"fixed", "sponge"}
 VALID_INITIAL_CONDITIONS = {"gaussian", "zero"}
-VALID_SOURCES = {"none", "point_sine"}
+VALID_SOURCES = {
+    "none",
+    "point_sine",
+    "line_sine",
+}
+VALID_MONITORS = {
+    "point",
+    "vertical_line",
+}
+
+VALID_MONITOR_REDUCTIONS = {
+    "mean",
+}
 
 
 @dataclass(frozen=True)
@@ -62,6 +74,22 @@ class SourceConfig:
     y: int
     amplitude: float = 0.5
     frequency: float = 0.075
+    y_start: int | None = None
+    y_stop: int | None = None
+    ramp_cycles: float = 0.0
+
+
+@dataclass(frozen=True)
+class FieldMonitorConfig:
+    """Configuration for one scalar-field monitor."""
+
+    name: str
+    kind: str
+    x: int
+    y: int | None = None
+    y_start: int | None = None
+    y_stop: int | None = None
+    reduction: str = "mean"
 
 
 @dataclass(frozen=True)
@@ -96,6 +124,7 @@ class SimulationConfig:
     source: SourceConfig
     boundary: BoundaryConfig
     visualization: VisualizationConfig
+    monitors: tuple[FieldMonitorConfig, ...] = ()
 
 
 def create_default_config() -> SimulationConfig:
@@ -242,22 +271,35 @@ def validate_config(config: SimulationConfig) -> None:
         if not (1 <= initial.y0 < grid.ny - 1):
             raise ValueError("y0 must be inside the interior domain.")
 
-    if source.kind == "point_sine":
+    active_sine_sources = {
+        "point_sine",
+        "line_sine",
+    }
+
+    if source.kind in active_sine_sources:
         if not (1 <= source.x < grid.nx - 1):
             raise ValueError(
                 "Source x-coordinate must be inside the interior domain."
             )
 
-        if not (1 <= source.y < grid.ny - 1):
+        if (
+            not np.isfinite(source.frequency)
+            or source.frequency <= 0
+        ):
             raise ValueError(
-                "Source y-coordinate must be inside the interior domain."
+                "source_frequency must be finite and positive."
             )
-
-        if source.frequency <= 0:
-            raise ValueError("source_frequency must be positive.")
 
         if not np.isfinite(source.amplitude):
             raise ValueError("source_amplitude must be finite.")
+
+        if (
+            not np.isfinite(source.ramp_cycles)
+            or source.ramp_cycles < 0
+        ):
+            raise ValueError(
+                "source_ramp_cycles must be finite and nonnegative."
+            )
 
         nyquist_frequency = 1.0 / (2.0 * time.dt)
 
@@ -265,6 +307,41 @@ def validate_config(config: SimulationConfig) -> None:
             raise ValueError(
                 "source_frequency must be below the temporal Nyquist "
                 f"frequency ({nyquist_frequency:.3f})."
+            )
+
+    if source.kind == "point_sine":
+        if not (1 <= source.y < grid.ny - 1):
+            raise ValueError(
+                "Source y-coordinate must be inside the interior domain."
+            )
+
+    if source.kind == "line_sine":
+        if source.y_start is None or source.y_stop is None:
+            raise ValueError(
+                "Line sources require y_start and y_stop."
+            )
+
+        if (
+            not isinstance(source.y_start, (int, np.integer))
+            or isinstance(source.y_start, (bool, np.bool_))
+        ):
+            raise TypeError("source_y_start must be an integer.")
+
+        if (
+            not isinstance(source.y_stop, (int, np.integer))
+            or isinstance(source.y_stop, (bool, np.bool_))
+        ):
+            raise TypeError("source_y_stop must be an integer.")
+
+        if not (
+            1
+            <= source.y_start
+            < source.y_stop
+            <= grid.ny - 1
+        ):
+            raise ValueError(
+                "Line-source bounds must define a nonempty "
+                "half-open interval inside the interior domain."
             )
 
     if boundary.kind == "sponge":
@@ -284,6 +361,117 @@ def validate_config(config: SimulationConfig) -> None:
 
         if boundary.damping_exponent <= 0:
             raise ValueError("damping_exponent must be positive.")
+
+    monitor_names: set[str] = set()
+
+    for monitor in config.monitors:
+        if not isinstance(monitor, FieldMonitorConfig):
+            raise TypeError(
+                "Each monitor must be a FieldMonitorConfig."
+            )
+
+        if not monitor.name or not monitor.name.strip():
+            raise ValueError(
+                "Monitor names must contain non-whitespace characters."
+            )
+
+        if monitor.name in monitor_names:
+            raise ValueError(
+                f"Duplicate monitor name: {monitor.name!r}."
+            )
+
+        monitor_names.add(monitor.name)
+
+        if monitor.kind not in VALID_MONITORS:
+            raise ValueError(
+                f"Unknown monitor type: {monitor.kind!r}. "
+                f"Available options: {sorted(VALID_MONITORS)}"
+            )
+
+        if not (
+            isinstance(monitor.x, (int, np.integer))
+            and not isinstance(monitor.x, (bool, np.bool_))
+        ):
+            raise TypeError("Monitor x-coordinate must be an integer.")
+
+        if not (1 <= monitor.x < grid.nx - 1):
+            raise ValueError(
+                "Monitor x-coordinate must be inside "
+                "the interior domain."
+            )
+
+        if monitor.kind == "point":
+            if not (
+                isinstance(monitor.y, (int, np.integer))
+                and not isinstance(monitor.y, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Point-monitor y-coordinate must be an integer."
+                )
+
+            if not (1 <= monitor.y < grid.ny - 1):
+                raise ValueError(
+                    "Point-monitor y-coordinate must be inside "
+                    "the interior domain."
+                )
+
+        if monitor.kind == "vertical_line":
+            if (
+                monitor.y_start is None
+                or monitor.y_stop is None
+            ):
+                raise ValueError(
+                    "Vertical-line monitors require "
+                    "y_start and y_stop."
+                )
+
+            if not (
+                isinstance(
+                    monitor.y_start,
+                    (int, np.integer),
+                )
+                and not isinstance(
+                    monitor.y_start,
+                    (bool, np.bool_),
+                )
+            ):
+                raise TypeError(
+                    "Monitor y_start must be an integer."
+                )
+
+            if not (
+                isinstance(
+                    monitor.y_stop,
+                    (int, np.integer),
+                )
+                and not isinstance(
+                    monitor.y_stop,
+                    (bool, np.bool_),
+                )
+            ):
+                raise TypeError(
+                    "Monitor y_stop must be an integer."
+                )
+
+            if not (
+                1
+                <= monitor.y_start
+                < monitor.y_stop
+                <= grid.ny - 1
+            ):
+                raise ValueError(
+                    "Vertical-line monitor bounds must define "
+                    "a nonempty half-open interval inside "
+                    "the interior domain."
+                )
+
+            if monitor.reduction not in VALID_MONITOR_REDUCTIONS:
+                raise ValueError(
+                    f"Unknown monitor reduction: "
+                    f"{monitor.reduction!r}. "
+                    "Available options: "
+                    f"{sorted(VALID_MONITOR_REDUCTIONS)}"
+                )
 
 
 def print_configuration(
@@ -315,10 +503,19 @@ def print_configuration(
     print(f"Initial condition:  {initial.kind}")
     print(f"Source type:        {source.kind}")
 
-    if source.kind == "point_sine":
-        print(f"Source position:    ({source.x}, {source.y})")
+    if source.kind in {"point_sine", "line_sine"}:
+        if source.kind == "point_sine":
+            print(f"Source position:    ({source.x}, {source.y})")
+        else:
+            print(
+                "Source aperture:    "
+                f"x={source.x}, "
+                f"y=[{source.y_start}, {source.y_stop})"
+            )
+
         print(f"Source amplitude:   {source.amplitude}")
         print(f"Source frequency:   {source.frequency}")
+        print(f"Source ramp:        {source.ramp_cycles} cycles")
 
         nominal_wavelength = source_wave_speed / source.frequency
         points_per_wavelength_x = nominal_wavelength / grid.dx

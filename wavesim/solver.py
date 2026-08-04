@@ -19,6 +19,17 @@ from .materials import (
     validate_material_map,
 )
 
+from .sources import (
+    apply_source,
+    create_source_profile,
+)
+
+from .monitors import (
+    FieldMonitorState,
+    create_monitor_states,
+    record_monitor_samples,
+)
+
 
 ENERGY_EPSILON = 1e-12
 
@@ -175,29 +186,6 @@ def compute_energy(
     return float(np.sum(energy_density) * grid.dx * grid.dy)
 
 
-def apply_source(
-    field: np.ndarray,
-    step_index: int,
-    config: SimulationConfig,
-) -> None:
-    """Apply the configured continuous source to a field in place."""
-    source = config.source
-
-    if source.kind == "none":
-        return
-
-    if source.kind == "point_sine":
-        time_value = step_index * config.time.dt
-        source_value = source.amplitude * np.sin(
-            2.0 * np.pi * source.frequency * time_value
-        )
-
-        field[source.x, source.y] += source_value
-        return
-
-    raise ValueError(f"Unknown source type: {source.kind!r}.")
-
-
 def step_wave(
     previous: np.ndarray,
     current: np.ndarray,
@@ -261,6 +249,7 @@ class Wave2DSimulation:
     ):
         validate_config(config)
         self.config = config
+        self.source_profile = create_source_profile(config)
 
         selected_material_map = (
             create_uniform_material_map(
@@ -313,6 +302,13 @@ class Wave2DSimulation:
             energy_history=[initial_energy],
         )
 
+        self.monitor_states: dict[str, FieldMonitorState] = (
+            create_monitor_states(
+                config.monitors,
+                self.state.current,
+            )
+        )
+
         self.initial_energy = initial_energy
         self.normalize_energy = (
             config.source.kind == "none"
@@ -337,7 +333,12 @@ class Wave2DSimulation:
         )
 
         # Preserve the Phase 1 source ordering: inject after the wave update.
-        apply_source(next_field, next_step_index, self.config)
+        apply_source(
+            next_field,
+            next_step_index,
+            self.config,
+            self.source_profile,
+        )
 
         current_energy = compute_energy(
             self.state.current,
@@ -350,6 +351,14 @@ class Wave2DSimulation:
         self.state.current = next_field
         self.state.step_index = next_step_index
         self.state.energy_history.append(current_energy)
+
+        record_monitor_samples(
+            self.config.monitors,
+            self.monitor_states,
+            self.state.current,
+            self.state.step_index,
+            self.config.time.dt,
+        )
 
         return current_energy
 

@@ -1,7 +1,12 @@
 """Public API for the photonics simulator."""
 
+from .analysis import (
+    HarmonicResponse,
+    estimate_harmonic_response,
+)
 from .config import (
     BoundaryConfig,
+    FieldMonitorConfig,
     GridConfig,
     InitialConditionConfig,
     MaterialConfig,
@@ -22,12 +27,16 @@ from .materials import (
     validate_material_map,
     validate_refractive_index_array,
 )
+from .monitors import FieldMonitorState
 from .solver import SimulationState, Wave2DSimulation
 
 
 __all__ = [
     "BoundaryConfig",
+    "FieldMonitorConfig",
+    "FieldMonitorState",
     "GridConfig",
+    "HarmonicResponse",
     "InitialConditionConfig",
     "MaterialConfig",
     "MaterialMap",
@@ -44,6 +53,7 @@ __all__ = [
     "create_planar_interface_material_map",
     "create_rectangular_material_map",
     "create_uniform_material_map",
+    "estimate_harmonic_response",
     "validate_material_map",
     "validate_refractive_index_array",
 ]

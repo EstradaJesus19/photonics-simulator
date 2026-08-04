@@ -10,7 +10,9 @@ FDTD methods.
 
 ## Current status
 
-**Phase 2 - Material infrastructure is complete and validated.**
+**Phase 3 - Controlled sources and field monitors is complete and
+validated. The local milestone commit and tag identify this state; pushing is
+handled separately.**
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -27,21 +29,45 @@ FDTD methods.
 - Phase 2.6 defined the stable public API and validated constructor
   compatibility, material invariants, CFL stability, wavelength resolution,
   simulation construction, and source-free energy behavior.
+- Phase 3.1 protected the established point-source values, timing, spatial
+  localization, additive behavior, and post-update injection order.
+- Phase 3.2 introduced precomputed, validated, read-only spatial source
+  profiles while preserving the exact Phase 2.1 numerical trajectory.
+- Phase 3.3 added a finite-aperture vertical sinusoidal line source and a
+  configurable sine-squared turn-on ramp.
+- Phase 3.4 added named point and vertical-line field monitors with histories
+  aligned to the completed simulation time levels.
+- Phase 3.5 added headless single-frequency amplitude and phase estimation.
+- Phase 3.6 validated controlled propagation through a uniform medium against
+  the finite-difference numerical dispersion relation.
+- Phase 3.7 added matched uniform-reference and dielectric-interface runs for
+  separating incident, reflected, and transmitted harmonic fields.
+- Phase 3.8 added source and monitor overlays, monitor-history plots, and
+  shaded harmonic-analysis windows.
+- Phase 3.9 defines the stable Phase 3 API and completes cross-feature
+  validation, technical documentation, and the final repository audit.
 
-The default uniform simulation remains numerically identical to the verified
-Phase 2.1 simulation. Dedicated Phase 2 scenarios now demonstrate an unbounded
-planar interface, a finite dielectric object, and a nested three-material
-composite.
+The default uniform simulation and continuous point source remain numerically
+identical to the verified Phase 2.1 simulation. The Phase 2 material scenarios
+continue to demonstrate an unbounded planar interface, a finite dielectric
+object, and a nested three-material composite.
 
 The composite scenario uses ordered geometry operations to place an
 \(n=2.0\) core inside an \(n=1.5\) outer rectangle. It demonstrates explicit
 overlap behavior, multiple interfaces, shorter internal wavelengths, slower
 propagation, scattering, and internal interference.
 
-The completed Phase 2 suite contains 59 tests. All official scenarios satisfy
-the shared material contract, CFL stability, and wavelength-resolution
-requirements. A source-free fixed-boundary composite run keeps the scalar-wave
-energy within a maximum observed deviation of approximately 2.8%.
+Phase 3 adds a controlled uniform-medium scenario and a paired reference/
+interface experiment. The controlled scenario verifies finite-aperture
+amplitude consistency and numerical phase advance. The paired experiment
+isolates the reflected response by subtracting the matched uniform reference
+from the upstream interface response.
+
+The Phase 2 baseline contains 59 tests. The completed Phase 3 suite contains
+139 tests spanning the Phase 2 contract and the new source, monitor,
+harmonic-analysis, scenario, visualization, and public-API behavior. All 139
+tests pass. The Phase 2 source-free composite energy result remains within a
+maximum observed deviation of approximately 2.8%.
 
 ## Governing model
 
@@ -165,6 +191,16 @@ The current implementation includes:
 - CFL stability validation using the fastest wave speed in the domain;
 - Gaussian and zero-field initial conditions;
 - an optional continuous sinusoidal point source;
+- precomputed and validated spatial source profiles;
+- read-only source profiles during active simulations;
+- finite-aperture vertical sinusoidal line sources;
+- configurable sine-squared source turn-on ramps;
+- named point field monitors;
+- named vertical-line field monitors;
+- coherent line-mean field sampling;
+- monitor histories aligned with completed simulation time levels;
+- single-frequency harmonic amplitude and phase estimation;
+- explicit half-open steady-state analysis windows;
 - fixed reflective boundaries;
 - sponge absorbing boundaries;
 - animated wave-field visualization;
@@ -173,9 +209,13 @@ The current implementation includes:
 - sponge-profile visualization;
 - scalar-wave energy diagnostics;
 - source wavelength and grid-resolution diagnostics;
+- source and monitor overlays on the wave animation;
+- monitor-history visualization with shaded analysis windows;
 - a dedicated planar-interface scenario;
 - a dedicated rectangular-dielectric scenario;
 - a dedicated nested composite-geometry scenario;
+- a dedicated controlled line-source propagation scenario;
+- a paired uniform-reference and planar-interface measurement scenario;
 - headless propagation verification across planar, rectangular, and composite
   dielectric geometries;
 - an explicit package-level public API;
@@ -183,6 +223,9 @@ The current implementation includes:
   composition;
 - a cross-scenario material, CFL, wavelength, and solver validation matrix;
 - source-free composite energy-conservation verification;
+- numerical-dispersion phase validation;
+- paired-run incident and reflected harmonic-field separation;
+- analytical scalar-interface coefficient validation;
 - regression tests that preserve the verified Phase 2.1 results.
 
 ## Project architecture
@@ -193,22 +236,34 @@ The reusable package is named `wavesim`.
 photonics-simulator/
 |-- wavesim/
 |   |-- __init__.py
+|   |-- analysis.py
 |   |-- config.py
 |   |-- materials.py
+|   |-- monitors.py
 |   |-- solver.py
+|   |-- sources.py
 |   `-- visualization.py
 |-- simulations/
 |   |-- __init__.py
 |   |-- wave2d_basic.py
 |   |-- wave2d_composite_geometry.py
+|   |-- wave2d_controlled_line_source.py
+|   |-- wave2d_interface_measurement.py
 |   |-- wave2d_planar_interface.py
 |   `-- wave2d_rectangular_dielectric.py
 |-- tests/
 |   |-- test_composite_geometry_scenario.py
+|   |-- test_controlled_line_source_scenario.py
+|   |-- test_interface_measurement_scenario.py
 |   |-- test_materials.py
+|   |-- test_monitors.py
+|   |-- test_analysis.py
+|   |-- test_monitor_visualization.py
 |   |-- test_phase2_1_regression.py
 |   |-- test_phase2_validation.py
+|   |-- test_phase3_validation.py
 |   |-- test_planar_interface_scenario.py
+|   |-- test_sources.py
 |   `-- test_rectangular_dielectric_scenario.py
 |-- notes/
 |   |-- mathematics/
@@ -230,6 +285,7 @@ photonics-simulator/
 `wavesim/config.py`
 
 - frozen configuration dataclasses;
+- source and monitor configuration;
 - configuration validation;
 - CFL calculation and validation;
 - configuration and wavelength reporting.
@@ -244,15 +300,35 @@ photonics-simulator/
 - defensive material-map finalization;
 - material-array validation.
 
+`wavesim/sources.py`
+
+- point and vertical-line source-profile construction;
+- spatial source-profile validation;
+- sine-squared turn-on envelopes;
+- additive time-harmonic source application.
+
+`wavesim/monitors.py`
+
+- point and vertical-line sampling;
+- coherent spatial-mean reduction;
+- monitor-history initialization and recording.
+
+`wavesim/analysis.py`
+
+- headless single-frequency harmonic analysis;
+- amplitude, phase, duration, and cycle-count reporting;
+- validation of temporal sampling and analysis windows.
+
 `wavesim/solver.py`
 
 - finite-difference operators;
 - initial-condition construction;
-- source application;
 - boundary handling;
 - damping-profile construction;
 - energy calculation;
 - simulation state and time stepping;
+- precomputed source-profile ownership;
+- time-aligned monitor sampling;
 - validation and use of optionally supplied material maps.
 
 The solver does not depend on Matplotlib and can be used in tests or future
@@ -262,8 +338,10 @@ headless workflows.
 
 - material and damping profile figures;
 - material-interface contours;
+- source and monitor overlays;
 - wave animation;
 - energy-history plotting;
+- monitor-history and analysis-window plotting;
 - the interactive simulation workflow.
 
 `simulations/wave2d_basic.py`
@@ -289,20 +367,49 @@ headless workflows.
 - a nested \(n=1.5\) outer region and \(n=2.0\) core;
 - a thin interactive entry point for the Phase 2.5 simulation.
 
-The intended dependency direction is
+`simulations/wave2d_controlled_line_source.py`
+
+- a headless-compatible uniform-medium scenario constructor;
+- a ramped finite-aperture line source and two coherent line monitors;
+- numerical phase validation and an interactive visualization entry point.
+
+`simulations/wave2d_interface_measurement.py`
+
+- matched uniform-reference and dielectric-interface construction;
+- headless paired execution;
+- incident, reflected, and transmitted harmonic-response analysis.
+
+The intended responsibility flow is
 
 ```text
-config -> materials -> solver -> visualization -> simulation entry points
+config
+  |-- materials
+  |-- sources
+  `-- monitors
+          |
+          v
+        solver
+          |
+          v
+recorded histories -> analysis -> visualization and scenario reporting
 ```
+
+`analysis.py` is a pure consumer of scalar histories and does not depend on
+the solver. The solver, source, monitor, material, and analysis modules remain
+independent of Matplotlib.
 
 ### Public package API
 
-Phase 2.6 defines and tests the supported package-level API. Core types and
-material operations can be imported directly:
+Phase 2.6 defined the original supported package-level API. Phase 3 adds the
+stable monitor and harmonic-analysis types. Core types and operations can be
+imported directly:
 
 ```python
 from wavesim import (
+    FieldMonitorConfig,
+    FieldMonitorState,
     GridConfig,
+    HarmonicResponse,
     MaterialConfig,
     MaterialMap,
     Wave2DSimulation,
@@ -312,12 +419,14 @@ from wavesim import (
     create_planar_interface_material_map,
     create_rectangular_material_map,
     create_uniform_material_map,
+    estimate_harmonic_response,
 )
 ```
 
-Existing imports from `wavesim.config`, `wavesim.materials`, and
-`wavesim.solver` remain supported. The public names are listed in
-`wavesim.__all__` and protected by the Phase 2 validation suite.
+Existing imports from `wavesim.config`, `wavesim.materials`,
+`wavesim.solver`, `wavesim.monitors`, and `wavesim.analysis` remain supported.
+The public names are listed in `wavesim.__all__` and protected by the Phase 2
+and Phase 3 validation suites.
 
 ## Configuration
 
@@ -328,9 +437,13 @@ Configuration values are grouped into frozen dataclasses:
 - `MaterialConfig`;
 - `InitialConditionConfig`;
 - `SourceConfig`;
+- `FieldMonitorConfig`;
 - `BoundaryConfig`;
 - `VisualizationConfig`;
 - `SimulationConfig`.
+
+`SimulationConfig.monitors` is an immutable tuple and defaults to an empty
+tuple, so existing configurations remain compatible.
 
 The default configuration can be created with
 
@@ -393,6 +506,10 @@ Source
     position = grid center
     amplitude = 0.5
     frequency = 0.075
+    ramp = 0 cycles
+
+Field monitors
+    none
 
 Boundary
     kind = sponge
@@ -608,10 +725,14 @@ Supported source types are:
 kind = "none"
 ```
 
+```python
+kind = "point_sine"
+```
+
 and
 
 ```python
-kind = "point_sine"
+kind = "line_sine"
 ```
 
 The point source is
@@ -624,6 +745,59 @@ and is added at one grid cell after the finite-difference wave update. That
 source ordering is intentional and is protected by the numerical regression
 test.
 
+Every source is represented internally by a floating-point spatial profile
+with the same shape as the simulation grid. Profiles are validated during
+simulation construction, marked read-only, and reused at every time step.
+
+The point profile contains one unit-weight cell:
+
+```python
+profile[source.x, source.y] = 1.0
+```
+
+The vertical line profile uses half-open transverse bounds:
+
+```python
+profile[
+    source.x,
+    source.y_start:source.y_stop,
+] = 1.0
+```
+
+The final occupied transverse index is therefore `y_stop - 1`.
+
+### Source turn-on ramp
+
+Active sources may use a sine-squared turn-on ramp specified in source cycles.
+For `ramp_cycles = N_ramp`, the duration is:
+
+```math
+T_r=\frac{N_{\mathrm{ramp}}}{f}.
+```
+
+The envelope is:
+
+```math
+g(t)
+=
+\begin{cases}
+\sin^2\left(\dfrac{\pi t}{2T_r}\right), & 0\le t<T_r,\\
+1, & t\ge T_r.
+\end{cases}
+```
+
+The distributed source is:
+
+```math
+s(x,y,t)
+=
+A\,g(t)\sin(2\pi ft)\,p(x,y),
+```
+
+where (p(x,y)) is the precomputed spatial profile. The default
+`ramp_cycles = 0` gives a unit envelope and preserves the established point
+source exactly.
+
 The nominal wavelength at the source is calculated from the local wave speed:
 
 ```math
@@ -632,6 +806,86 @@ The nominal wavelength at the source is calculated from the local wave speed:
 
 The program reports grid points per wavelength and warns when the spatial
 resolution falls below ten points per wavelength.
+
+## Field monitors
+
+Phase 3 supports named field monitors configured through
+`FieldMonitorConfig`.
+
+Point monitors sample:
+
+```python
+field[monitor.x, monitor.y]
+```
+
+Vertical-line monitors sample the half-open interval:
+
+```python
+field[
+    monitor.x,
+    monitor.y_start:monitor.y_stop,
+]
+```
+
+and initially support the coherent spatial mean:
+
+```math
+\bar E_z(x,t)
+=
+\frac{1}{N_y}
+\sum_j E_z(x,j,t).
+```
+
+The coherent mean retains sign and phase information. An RMS reduction would
+discard both and is therefore not used for the harmonic measurements.
+
+Each `FieldMonitorState` stores parallel lists of:
+
+```text
+steps
+times
+values
+```
+
+Histories begin with the initial field at step 0 and time 0. Each subsequent
+sample is recorded after the wave update, source injection, energy calculation,
+and state promotion. Monitor sample (n) therefore represents the completed
+field at:
+
+```math
+t_n=n\Delta t.
+```
+
+After (N) calls to `advance()`, monitor and energy histories both contain
+(N+1) entries.
+
+## Harmonic-response analysis
+
+`estimate_harmonic_response` estimates a single complex temporal harmonic from
+any one-dimensional scalar history. It removes the mean of the selected
+half-open window and computes:
+
+```math
+\tilde E_z(f)
+=
+\frac{2}{N}
+\sum_{n=n_0}^{n_1-1}
+\left(E_{z,n}-\bar E_z\right)
+e^{-i2\pi f t_n}.
+```
+
+For the cosine-based phase convention:
+
+```math
+A\cos(2\pi ft+\phi)
+\quad\Longrightarrow\quad
+\tilde E_z=Ae^{i\phi}.
+```
+
+Thus a sine source has phase (-\pi/2). `HarmonicResponse` reports the complex
+amplitude, magnitude, phase, frequency, window bounds, sample count, duration,
+and cycle count. Analysis validates finite samples, time step, frequency,
+temporal Nyquist, window bounds, and a minimum number of cycles.
 
 ## Boundary conditions
 
@@ -790,6 +1044,18 @@ Run the Phase 2.5 composite-geometry scenario with:
 python -m simulations.wave2d_composite_geometry
 ```
 
+Run the Phase 3 controlled line-source scenario with:
+
+```powershell
+python -m simulations.wave2d_controlled_line_source
+```
+
+Run the paired Phase 3 reference/interface measurement headlessly with:
+
+```powershell
+python -m simulations.wave2d_interface_measurement
+```
+
 Module execution is required because `simulations` imports the reusable
 top-level `wavesim` package. Direct execution such as
 `python simulations\wave2d_basic.py` may not include the repository root in the
@@ -803,8 +1069,167 @@ The interactive workflow:
 4. prints configuration and material diagnostics;
 5. displays the refractive-index map;
 6. displays the sponge profile when enabled;
-7. animates the wave field;
-8. displays the energy history after the animation closes.
+7. animates the field with configured source and monitor overlays;
+8. displays monitor histories and the optional harmonic-analysis window;
+9. displays the energy history after the animation closes.
+
+### Controlled line-source scenario
+
+The Phase 3 controlled propagation scenario uses:
+
+```text
+Grid
+    nx = 260
+    ny = 180
+    dt = 0.4
+    steps = 700
+
+Material
+    refractive index = 1.0
+    wave speed = 1.0
+
+Line source
+    x = 45
+    y indices = [35, 145)
+    amplitude = 0.5
+    frequency = 0.05
+    ramp = 4 cycles
+
+First line monitor
+    x = 90
+    y indices = [60, 120)
+
+Second line monitor
+    x = 125
+    y indices = [60, 120)
+
+Boundary
+    kind = sponge
+    damping width = 25
+
+Harmonic analysis
+    steps = [450, 700)
+    samples = 250
+    duration = 100
+    cycles = 5
+```
+
+The nominal wavelength is 20 cells. The monitors are separated by 35 cells,
+or 1.75 nominal wavelengths, so the wrapped phase difference is nontrivial.
+The measured phase advance is validated against the finite-difference
+dispersion relation:
+
+```math
+\sin^2\left(\frac{\omega\Delta t}{2}\right)
+=
+\left(\frac{c\Delta t}{\Delta x}\right)^2
+\sin^2\left(\frac{k_h\Delta x}{2}\right).
+```
+
+The source and monitor apertures remain outside the sponge. The interactive
+workflow displays their positions, both time histories, and the shaded
+five-cycle analysis window.
+
+### Paired interface-measurement scenario
+
+The paired Phase 3 experiment uses one common configuration with two material
+maps:
+
+```text
+Reference run
+    uniform n = 1.0
+
+Interface run
+    n_left = 1.0
+    n_right = 1.5
+    interface x index = 180
+```
+
+The common measurement geometry is:
+
+```text
+Grid
+    nx = 340
+    ny = 180
+    dt = 0.4
+    steps = 900
+
+Line source
+    x = 45
+    y indices = [35, 145)
+    frequency = 0.05
+    ramp = 4 cycles
+
+Upstream monitor
+    x = 110
+    y indices = [60, 120)
+
+Downstream monitor
+    x = 225
+    y indices = [60, 120)
+
+Harmonic analysis
+    steps = [750, 900)
+    samples = 150
+    duration = 60
+    cycles = 3
+```
+
+The incident response is the upstream uniform-reference response. Matched-run
+subtraction isolates the reflected response:
+
+```math
+\tilde E_r
+=
+\tilde E_{\mathrm{interface,upstream}}
+-
+\tilde E_{\mathrm{reference,upstream}}.
+```
+
+The measured ratios are:
+
+```math
+r_{\mathrm{measured}}
+=
+\frac{\tilde E_r}{\tilde E_i},
+```
+
+and:
+
+```math
+t_{\mathrm{measured}}
+=
+\frac{\tilde E_{\mathrm{interface,downstream}}}
+{\tilde E_{\mathrm{reference,downstream}}}.
+```
+
+For the ideal scalar infinite-plane-wave interface, the analytical values are:
+
+```text
+r = -0.2
+|r| = 0.2
+t = 0.8
+R = 0.04
+T = 0.96
+R + T = 1.0
+```
+
+The recorded finite-aperture measurements are approximately:
+
+```text
+|r| = 0.155402
+|t| = 0.637483
+R = 0.024150
+T = 0.609576
+R + T = 0.633726
+```
+
+The measured (R+T) is not a complete conservation measurement. The finite
+source and central line monitors do not integrate flux across the transverse
+domain; diffraction redistributes field outside the monitor aperture, and the
+sponge removes part of that field. The tests therefore require finite,
+positive, physically scaled responses while testing exact flux balance only
+for the analytical infinite-plane-wave coefficients.
 
 ### Planar-interface scenario
 
@@ -1044,12 +1469,37 @@ The tests cover:
 - wavelength-resolution verification for all three composite materials;
 - finite fields and energy during all propagation smoke tests;
 - broad protection against numerical runaway;
-- the complete verified Phase 2.1 numerical regression.
+- the complete verified Phase 2.1 numerical regression;
+- legacy point-source localization, timing, addition, and injection order;
+- spatial source-profile construction, validation, reuse, and immutability;
+- finite-aperture line-source half-open bounds;
+- sine-squared source-ramp behavior;
+- point and vertical-line monitor sampling;
+- monitor naming, bounds, time alignment, and history lengths;
+- harmonic amplitude and phase recovery from synthetic signals;
+- DC-offset removal, Nyquist validation, and analysis-window validation;
+- controlled uniform-medium amplitude consistency;
+- phase advance against the finite-difference dispersion relation;
+- matched reference/interface scenario construction;
+- incident and reflected harmonic-field separation;
+- analytical scalar reflection, transmission, and flux coefficients;
+- finite-aperture response bounds and limitations;
+- source and monitor visualization overlays;
+- monitor-history and analysis-window visualization;
+- the stable Phase 3 public API and cross-feature scenario contracts.
 
-The current suite contains:
+The Phase 2 baseline contains:
 
 ```text
 59 tests
+```
+
+The completed suite contains:
+
+```text
+Ran 139 tests in 9.946s
+
+OK
 ```
 
 For the default 500-step simulation, the protected energy checkpoints are
@@ -1127,9 +1577,77 @@ All 16 Python source and test files compile successfully, every official
 scenario constructor imports headlessly, and no unresolved `TODO`, `FIXME`,
 `XXX`, or `HACK` markers remain.
 
+Those results describe the tagged Phase 2 baseline. The final Phase 3 audit
+independently produced:
+
+```text
+Ran 139 tests in 9.946s
+
+OK
+
+Compiled 28 Python files successfully
+Phase 3 headless imports and scenario construction succeeded
+git diff --check passed
+No unresolved markers in Python source or tests
+```
+
+Documentation contains only intentional references to marker names while
+describing the repository-quality audits. Git's LF-to-CRLF messages are normal
+Windows line-ending notices rather than whitespace failures.
+
+## Phase 3 validation
+
+Phase 3 validation spans three levels.
+
+### Source and monitor unit contracts
+
+The unit tests protect:
+
+- exact legacy point-source behavior;
+- immutable precomputed profiles;
+- line-source and line-monitor half-open geometry;
+- source ramp timing;
+- monitor sampling after source injection;
+- step-0 initialization and (N+1) history lengths;
+- harmonic amplitude and phase conventions.
+
+### Controlled propagation
+
+The uniform scenario checks:
+
+- valid source and monitor placement outside the sponge;
+- material, CFL, and wavelength-resolution requirements;
+- finite nonzero harmonic responses at both monitors;
+- reasonable finite-aperture amplitude consistency;
+- phase advance consistent with numerical dispersion.
+
+### Paired interface measurement
+
+The paired scenario checks:
+
+- identical configurations and monitor geometry in both runs;
+- the expected uniform and two-material maps;
+- steady-state analysis only after the fully ramped field arrives;
+- finite incident, reflected, and transmitted responses;
+- approximate field-coefficient scale;
+- exact analytical scalar coefficient and flux relationships;
+- explicit rejection of complete-flux claims for the finite monitor aperture.
+
+The stable Phase 3 package-level additions are:
+
+```text
+FieldMonitorConfig
+FieldMonitorState
+HarmonicResponse
+estimate_harmonic_response
+```
+
+Source construction, sampling helpers, and the scenario-specific
+`ScatteringResponse` remain internal implementation details.
+
 ## Current limitations
 
-The validated Phase 2 model:
+The Phase 3 implementation:
 
 - evolves only the \(E_z\) field rather than the full Maxwell field set;
 - provides dedicated helpers for one vertical planar interface and one
@@ -1143,21 +1661,35 @@ The validated Phase 2 model:
 - assumes spatially constant magnetic permeability;
 - models only lossless, nondispersive dielectrics;
 - uses normalized simulation units;
-- uses a localized single-cell source;
-- supports qualitative but not quantitative Fresnel analysis;
+- supports point and finite-aperture vertical line sources, but not an exact
+  infinite plane wave;
+- launches line-source waves in both positive and negative (x) directions;
+- does not provide Gaussian beams, angled phased sources, or total-field/
+  scattered-field injection;
+- supports point and coherent line-mean field monitors, but not full-domain
+  time-averaged flux monitors;
+- uses finite-aperture reference subtraction for approximate scalar-interface
+  measurements;
+- does not provide complete quantitative Fresnel validation;
+- requires the caller to choose a steady harmonic-analysis window;
+- stores monitor histories in memory as Python lists;
 - uses a sponge layer rather than a PML;
 - does not store \(H_x\) or \(H_y\);
 - uses a scalar wave-equation energy diagnostic rather than complete
   electromagnetic energy;
+- uses the existing pointwise variable-speed interface discretization rather
+  than a conservative flux-form interface operator;
 - does not save simulation results automatically.
 
-The point source emits circular waves over many incidence angles. A controlled
-line, beam, or plane-wave-like source is required before quantitative
-reflection and transmission measurements are appropriate.
+The finite line source produces a controlled plane-wave-like central region,
+but its ends diffract. A central line monitor samples only part of the
+transverse field and therefore does not measure complete power or energy flux.
+The paired measurements are appropriate for separating and comparing harmonic
+fields, not for claiming exact electromagnetic Fresnel coefficients.
 
-These limitations define the boundary of the completed Phase 2 material
-infrastructure. Future geometry, source, boundary, and Maxwell-solver work can
-build on this validated base without expanding Phase 2 further.
+These limitations define the Phase 3 scientific boundary. Future geometry,
+source, flux, boundary, and Maxwell-solver work can build on the validated
+material, source-profile, monitoring, and harmonic-analysis infrastructure.
 
 ## Documentation
 
@@ -1172,6 +1704,17 @@ notes/simulation-logs/
 Simulation logs record parameter choices, numerical changes, tests, observed
 behavior, limitations, and future work.
 
+The living mathematics notes are:
+
+- [Finite Difference Method](notes/mathematics/01_finite_difference_method.md);
+- [Harmonic Response Analysis](notes/mathematics/02_harmonic_response_analysis.md).
+
+The living physics notes are:
+
+- [Two-Dimensional Wave Equation](notes/physics/01_2d_wave_equation.md);
+- [E_z Dielectric Interface Model](notes/physics/02_ez_dielectric_interface_model.md);
+- [Controlled Sources and Field Monitors](notes/physics/03_controlled_sources_and_field_monitors.md).
+
 The Phase 2 material and geometry documentation includes:
 
 ```text
@@ -1182,6 +1725,14 @@ notes/simulation-logs/phase_2/2026-07-29_003_rectangular_dielectric_region.md
 notes/simulation-logs/phase_2/2026-07-30_004_reusable_geometry_functions.md
 notes/simulation-logs/phase_2/2026-07-30_005_phase_2_validation.md
 ```
+
+The Phase 3 controlled-source and monitor record is:
+
+[Phase 3 — Controlled Sources and Field Monitors](notes/simulation-logs/phase_3/2026-08-04_001_controlled_sources_and_field_monitors.md).
+
+The complete simulation-log index and historical-record policy are in:
+
+[Simulation Logs Index](notes/simulation-logs/READ.md).
 
 ## Roadmap
 
@@ -1204,10 +1755,24 @@ notes/simulation-logs/phase_2/2026-07-30_005_phase_2_validation.md
 - [x] Phase 2.5: Reusable geometry functions
 - [x] Phase 2.6: Phase validation
 
+### Phase 3 - Controlled sources and field monitors
+
+- [x] Phase 3.1: Legacy source behavioral contract
+- [x] Phase 3.2: Spatial source-profile abstraction
+- [x] Phase 3.3: Ramped finite-aperture line source
+- [x] Phase 3.4: Point and vertical-line field monitors
+- [x] Phase 3.5: Harmonic amplitude and phase analysis
+- [x] Phase 3.6: Controlled uniform-medium propagation
+- [x] Phase 3.7: Paired dielectric-interface measurement
+- [x] Phase 3.8: Source and monitor visualization
+- [x] Phase 3.9: Final audit and repository closeout
+
 ### Possible future phases
 
 - mask-based circles, ellipses, polygons, and rotated geometries;
-- controlled line, beam, or plane-wave sources;
+- Gaussian beams and angled phased-array sources;
+- total-field/scattered-field source injection;
+- full transverse time-averaged flux monitors;
 - conservative interface discretizations;
 - improved absorbing boundaries and PML;
 - TE and TM electromagnetic FDTD solvers;

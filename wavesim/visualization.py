@@ -89,7 +89,22 @@ def create_wave_animation(
             linewidth=1.0,
             label="Material interface",
         )
-        axis.legend(loc="upper right")
+
+    add_source_and_monitor_overlays(
+        axis,
+        simulation,
+    )
+
+    legend_handles, legend_labels = (
+        axis.get_legend_handles_labels()
+    )
+
+    if legend_handles:
+        axis.legend(
+            legend_handles,
+            legend_labels,
+            loc="upper right",
+        )
 
     axis.set_xlabel("x grid index")
     axis.set_ylabel("y grid index")
@@ -207,6 +222,8 @@ def add_material_profile_figure(
 def run_interactive_simulation(
     config: SimulationConfig,
     material_map: MaterialMap | None = None,
+    *,
+    monitor_analysis_window: tuple[int, int] | None = None,
 ) -> Wave2DSimulation:
     """Validate, report, animate, and plot one simulation."""
     simulation = Wave2DSimulation(
@@ -218,14 +235,17 @@ def run_interactive_simulation(
         np.max(simulation.material_map.wave_speed)
     )
 
+    active_source_cells = simulation.source_profile != 0.0
+
     source_wave_speed = (
         float(
-            simulation.material_map.wave_speed[
-                config.source.x,
-                config.source.y,
-            ]
+            np.min(
+                simulation.material_map.wave_speed[
+                    active_source_cells
+                ]
+            )
         )
-        if config.source.kind == "point_sine"
+        if np.any(active_source_cells)
         else maximum_wave_speed
     )
 
@@ -266,5 +286,142 @@ def run_interactive_simulation(
     _ = animation
     plt.show()
 
+    if monitor_analysis_window is None:
+        add_monitor_history_figure(simulation)
+    else:
+        analysis_start_step, analysis_stop_step = (
+            monitor_analysis_window
+        )
+
+        add_monitor_history_figure(
+            simulation,
+            analysis_start_step=analysis_start_step,
+            analysis_stop_step=analysis_stop_step,
+        )
+
     plot_energy_history(simulation)
     return simulation
+
+
+def add_source_and_monitor_overlays(
+    axis,
+    simulation: Wave2DSimulation,
+) -> None:
+    """Mark configured sources and monitors on a field axis."""
+    source = simulation.config.source
+
+    if source.kind == "point_sine":
+        axis.plot(
+            source.x,
+            source.y,
+            marker="*",
+            markersize=10,
+            color="gold",
+            markeredgecolor="black",
+            linestyle="none",
+            label="Point source",
+        )
+
+    elif source.kind == "line_sine":
+        axis.plot(
+            [source.x, source.x],
+            [source.y_start, source.y_stop - 1],
+            color="gold",
+            linewidth=3.0,
+            label="Line source",
+        )
+
+    for monitor in simulation.config.monitors:
+        if monitor.kind == "point":
+            axis.plot(
+                monitor.x,
+                monitor.y,
+                marker="o",
+                markersize=6,
+                markerfacecolor="none",
+                markeredgecolor="lime",
+                linestyle="none",
+                label=f"Monitor: {monitor.name}",
+            )
+
+        elif monitor.kind == "vertical_line":
+            axis.plot(
+                [monitor.x, monitor.x],
+                [monitor.y_start, monitor.y_stop - 1],
+                color="lime",
+                linewidth=1.5,
+                linestyle=":",
+                label=f"Monitor: {monitor.name}",
+            )
+
+def add_monitor_history_figure(
+    simulation: Wave2DSimulation,
+    *,
+    analysis_start_step: int | None = None,
+    analysis_stop_step: int | None = None,
+):
+    """Create a monitor-history figure with an optional analysis window."""
+    if not simulation.config.monitors:
+        return None
+
+    if (
+        analysis_start_step is None
+    ) != (
+        analysis_stop_step is None
+    ):
+        raise ValueError(
+            "analysis_start_step and analysis_stop_step "
+            "must either both be supplied or both be omitted."
+        )
+
+    if analysis_start_step is not None:
+        if not (
+            0
+            <= analysis_start_step
+            < analysis_stop_step
+            <= simulation.state.step_index + 1
+        ):
+            raise ValueError(
+                "Analysis bounds must define a nonempty "
+                "half-open interval inside the recorded history."
+            )
+
+    figure, axis = plt.subplots()
+
+    for monitor in simulation.config.monitors:
+        state = simulation.monitor_states[monitor.name]
+
+        axis.plot(
+            state.times,
+            state.values,
+            label=monitor.name,
+        )
+
+    if analysis_start_step is not None:
+        start_time = (
+            analysis_start_step
+            * simulation.config.time.dt
+        )
+        stop_time = (
+            analysis_stop_step
+            * simulation.config.time.dt
+        )
+
+        axis.axvspan(
+            start_time,
+            stop_time,
+            color="gray",
+            alpha=0.2,
+            label="Harmonic-analysis window",
+        )
+
+    axis.set_title(
+        "Field Monitor Histories\n"
+        f"Source: {simulation.config.source.kind}"
+    )
+    axis.set_xlabel("Simulation time")
+    axis.set_ylabel(r"Monitored $E_z$")
+    axis.grid(True)
+    axis.legend()
+
+    return figure
