@@ -1,5 +1,10 @@
 # 03 — Controlled Sources and Field Monitors
 
+> **Status:** Current technical reference through Phase 3.
+>
+> **Scope:** Controlled spatial source profiles, smooth source turn-on, field
+> monitors, harmonic response, and approximate interface measurements.
+
 ## 1. Purpose of this note
 
 The purpose of this note is to explain the physical and numerical meaning of
@@ -64,12 +69,12 @@ The source is applied after the ordinary finite-difference wave update.
 The solver ordering is:
 
 ```text
-calculate next field from previous and current fields
-    -> apply fixed outer boundary values
-    -> add the configured source
-    -> calculate energy
-    -> promote the next field to the current state
-    -> record field monitors
+-> calculate next field from previous and current fields
+-> apply fixed outer boundary values
+-> add the configured source
+-> calculate energy
+-> promote the next field to the current state
+-> record field monitors
 ```
 
 At an active source cell, the source performs an addition:
@@ -560,14 +565,111 @@ simple subtraction.
 
 ## 17. Analytical scalar interface coefficients
 
-For a harmonic plane wave at normal incidence, define:
+Consider a harmonic plane wave normally incident on a flat interface between two homogeneous media.
+
+Let the interface be located at (x=0), with medium 1 on the left and medium 2 on the right. The corresponding wave numbers are
 
 ```math
-k_m=\frac{\omega}{c_m}.
+k_1=\frac{\omega}{c_1},
+\qquad
+k_2=\frac{\omega}{c_2}.
 ```
 
-Continuity of `E_z` and its normal derivative gives the scalar field
-coefficients:
+The total field consists of an incident wave, a reflected wave, and a transmitted wave. Using complex harmonic notation,
+
+```math
+\tilde E_i(x)
+=
+A_i e^{ik_1x},
+```
+
+```math
+\tilde E_r(x)
+=
+A_r e^{-ik_1x},
+```
+
+and
+
+```math
+\tilde E_t(x)
+=
+A_t e^{ik_2x}.
+```
+
+The reflected wave has the opposite spatial phase evolution because it propagates in the opposite direction.
+
+At the interface, the scalar model imposes continuity of both (E_z) and its normal derivative.
+
+### 17.1 Continuity of the field
+
+At (x=0),
+
+```math
+E_i+E_r=E_t.
+```
+
+Using the interface amplitudes,
+
+```math
+A_i+A_r=A_t.
+```
+
+Define the complex field-amplitude coefficients
+
+```math
+r=\frac{A_r}{A_i},
+\qquad
+t=\frac{A_t}{A_i}.
+```
+
+Dividing the continuity condition by (A_i) gives
+
+```math
+1+r=t.
+```
+
+### 17.2 Continuity of the normal derivative
+
+The second interface condition is
+
+```math
+\frac{\partial E_z}{\partial x}\bigg|_{1}
+=
+\frac{\partial E_z}{\partial x}\bigg|_{2}.
+```
+
+Differentiating the three harmonic waves gives, at the interface,
+
+```math
+ik_1A_i
+-
+ik_1A_r
+=
+ik_2A_t.
+```
+
+After cancelling (i) and dividing by (A_i),
+
+```math
+k_1(1-r)
+=
+k_2t.
+```
+
+The two interface conditions are therefore
+
+```math
+1+r=t,
+```
+
+and
+
+```math
+k_1(1-r)=k_2t.
+```
+
+Solving them gives the scalar reflection coefficient
 
 ```math
 r
@@ -575,7 +677,7 @@ r
 \frac{k_1-k_2}{k_1+k_2},
 ```
 
-and:
+and the scalar transmission coefficient
 
 ```math
 t
@@ -583,13 +685,35 @@ t
 \frac{2k_1}{k_1+k_2}.
 ```
 
-For the normalized nonmagnetic materials:
+These coefficients describe **field amplitudes at the interface**.
+
+### 17.3 Expression in terms of refractive index
+
+For the normalized nonmagnetic materials used in the simulator,
 
 ```math
-c_m=\frac{1}{n_m},
+c_m=\frac{1}{n_m}.
 ```
 
-so:
+Therefore,
+
+```math
+k_m
+=
+\frac{\omega}{c_m}
+=
+\omega n_m.
+```
+
+Substituting
+
+```math
+k_1=\omega n_1,
+\qquad
+k_2=\omega n_2
+```
+
+into the interface coefficients causes the common factor (\omega) to cancel, giving
 
 ```math
 r
@@ -597,7 +721,7 @@ r
 \frac{n_1-n_2}{n_1+n_2},
 ```
 
-and:
+and
 
 ```math
 t
@@ -605,50 +729,311 @@ t
 \frac{2n_1}{n_1+n_2}.
 ```
 
-For:
+For
 
 ```text
 n1 = 1.0
 n2 = 1.5
 ```
 
-the scalar predictions are:
+the scalar predictions are
+
+```math
+r
+=
+\frac{1.0-1.5}{1.0+1.5}
+=
+-0.2,
+```
+
+and
+
+```math
+t
+=
+\frac{2(1.0)}{1.0+1.5}
+=
+0.8.
+```
+
+Thus,
 
 ```text
 r = -0.2
 t = 0.8
 ```
 
-The negative reflection coefficient represents a phase reversal.
+The magnitude of the reflected field is therefore
+
+```math
+|r|=0.2.
+```
+
+The negative sign does not represent a negative physical amplitude. Instead, it indicates a phase reversal of
+
+```math
+\pi
+```
+
+between the reflected and incident fields.
+
+Equivalently,
+
+```math
+-0.2
+=
+0.2e^{i\pi}.
+```
+
+The transmitted coefficient is positive, so the interface itself introduces no additional (\pi)-phase reversal in the transmitted field.
+
+These values are field-amplitude coefficients, not directly reflected and transmitted power fractions. In addition, they describe the fields at the interface. Complex responses measured by monitors located away from the interface also contain propagation phase and must be interpreted accordingly.
+
 
 ---
 
-## 18. Scalar flux coefficients
+## 18. Scalar energy-flux coefficients
 
-For a harmonic right-propagating scalar plane wave, the time-averaged flux
-magnitude is proportional to:
+The reflection and transmission coefficients derived above,
 
 ```math
+r=\frac{A_r}{A_i},
+\qquad
+t=\frac{A_t}{A_i},
+```
+
+describe **field amplitudes**.
+
+To determine how much wave energy is reflected and transmitted, the corresponding energy flux must be considered.
+
+### 18.1 Energy flux of the scalar wave
+
+Inside a homogeneous medium, the scalar wave equation can be written as
+
+```math
+\frac{1}{c_m^2}
+\frac{\partial^2 E_z}{\partial t^2}
+=
+\frac{\partial^2 E_z}{\partial x^2}.
+```
+
+Multiplying by $\partial E_z/\partial t$ and applying the product rule gives a local conservation equation of the form
+
+```math
+\frac{\partial \mathcal E}{\partial t}
++
+\frac{\partial S_x}{\partial x}
+=
+0,
+```
+
+where the scalar energy flux is proportional to
+
+```math
+S_x
+\propto
+-
+\frac{\partial E_z}{\partial t}
+\frac{\partial E_z}{\partial x}.
+```
+
+This quantity plays a role analogous to the Poynting flux in electromagnetic theory: its sign indicates the direction in which wave energy propagates.
+
+For a harmonic right-propagating plane wave,
+
+```math
+E_z(x,t)
+=
+A\cos(\omega t-kx+\phi),
+```
+
+the derivatives are
+
+```math
+\frac{\partial E_z}{\partial t}
+=
+-\omega A
+\sin(\omega t-kx+\phi),
+```
+
+and
+
+```math
+\frac{\partial E_z}{\partial x}
+=
+kA
+\sin(\omega t-kx+\phi).
+```
+
+Therefore,
+
+```math
+S_x
+\propto
+\omega k |A|^2
+\sin^2(\omega t-kx+\phi).
+```
+
+Averaging over one oscillation period and using
+
+```math
+\left\langle\sin^2(\cdot)\right\rangle
+=
+\frac{1}{2},
+```
+
+gives
+
+```math
+\boxed{
 \langle S_x\rangle
 \propto
-\omega k|A|^2.
+\frac{1}{2}\omega k|A|^2
+}.
 ```
 
-The reflected fraction is:
+Since the factor $1/2$ is common to all waves being compared, it can be omitted when forming flux ratios. Thus,
 
 ```math
-R=|r|^2.
+\boxed{
+|\langle S_x\rangle|
+\propto
+\omega k|A|^2
+}.
 ```
 
-The transmitted fraction includes the wave-number ratio:
+This explains why a field-amplitude ratio alone is not always sufficient to determine the transmitted energy fraction: the flux also depends on the wave number of the medium.
+
+### 18.2 Reflected fraction
+
+The incident and reflected waves both propagate in medium 1, so they have the same wave-number magnitude $k_1$.
+
+Their flux magnitudes are proportional to
+
+```math
+|\langle S_i\rangle|
+\propto
+\omega k_1|A_i|^2,
+```
+
+and
+
+```math
+|\langle S_r\rangle|
+\propto
+\omega k_1|A_r|^2.
+```
+
+The reflected energy-flux fraction is therefore
+
+```math
+R
+=
+\frac{
+|\langle S_r\rangle|
+}{
+|\langle S_i\rangle|
+}.
+```
+
+The common factors cancel:
+
+```math
+R
+=
+\frac{|A_r|^2}{|A_i|^2}.
+```
+
+Since
+
+```math
+r=\frac{A_r}{A_i},
+```
+
+the reflected fraction is
+
+```math
+\boxed{
+R=|r|^2
+}.
+```
+
+The reflected flux itself travels in the negative (x) direction, but (R) is defined as a positive fraction using its magnitude.
+
+### 18.3 Transmitted fraction
+
+The transmitted wave propagates in medium 2, so its wave number is (k_2).
+
+Its flux magnitude is
+
+```math
+|\langle S_t\rangle|
+\propto
+\omega k_2|A_t|^2.
+```
+
+Dividing by the incident flux gives
 
 ```math
 T
 =
-\frac{k_2}{k_1}|t|^2.
+\frac{
+\omega k_2|A_t|^2
+}{
+\omega k_1|A_i|^2
+}.
 ```
 
-For normalized nonmagnetic materials:
+Therefore,
+
+```math
+T
+=
+\frac{k_2}{k_1}
+\frac{|A_t|^2}{|A_i|^2}.
+```
+
+Using
+
+```math
+t=\frac{A_t}{A_i},
+```
+
+the transmitted energy-flux fraction is
+
+```math
+\boxed{
+T
+=
+\frac{k_2}{k_1}|t|^2
+}.
+```
+
+Unlike reflection, the wave number does not cancel because the incident and transmitted waves propagate in different media.
+
+### 18.4 Expression in terms of refractive index
+
+For the normalized nonmagnetic materials used in the simulator,
+
+```math
+c_m=\frac{1}{n_m}.
+```
+
+Since
+
+```math
+k_m
+=
+\frac{\omega}{c_m},
+```
+
+this gives
+
+```math
+k_m=\omega n_m.
+```
+
+Consequently,
 
 ```math
 \frac{k_2}{k_1}
@@ -656,19 +1041,121 @@ For normalized nonmagnetic materials:
 \frac{n_2}{n_1}.
 ```
 
-With `n1 = 1.0` and `n2 = 1.5`:
+The transmitted fraction can therefore be written as
+
+```math
+\boxed{
+T
+=
+\frac{n_2}{n_1}|t|^2
+}.
+```
+
+### 18.5 Example
+
+For
+
+```text
+n1 = 1.0
+n2 = 1.5
+```
+
+the analytical field-amplitude coefficients are
+
+```text
+r = -0.2
+t = 0.8
+```
+
+The reflected fraction is
+
+```math
+R
+=
+|-0.2|^2
+=
+0.04.
+```
+
+Thus,
 
 ```text
 R = 0.04
-T = 1.5 * 0.8^2 = 0.96
+```
+
+or (4%) of the incident scalar energy flux.
+
+For transmission,
+
+```math
+T
+=
+\frac{1.5}{1.0}
+|0.8|^2
+=
+1.5(0.64)
+=
+0.96.
+```
+
+Therefore,
+
+```text
+T = 0.96
+```
+
+or (96%) of the incident scalar energy flux.
+
+The total is
+
+```math
+R+T
+=
+0.04+0.96
+=
+1.
+```
+
+Hence,
+
+```text
+R = 0.04
+T = 0.96
 R + T = 1.0
 ```
 
-This exact balance applies to the ideal infinite scalar plane-wave problem.
+The fact that (t=0.8) but (T=0.96) illustrates the difference between **field amplitude** and **energy flux**. The transmitted field amplitude is only (80%) of the incident amplitude, but the transmitted medium has a different wave number, which changes the amount of flux associated with a given field amplitude.
 
-The current finite-aperture line-monitor experiment does not measure the
-complete transverse flux. Its aperture estimate is therefore not required to
-satisfy `R + T = 1`.
+### 18.6 Ideal balance and numerical monitor measurements
+
+The exact relation
+
+```math
+R+T=1
+```
+
+applies to the ideal lossless infinite scalar plane-wave problem.
+
+It follows from energy conservation: with no absorption or other loss mechanisms, all incident energy must leave the interface either as reflected or transmitted flux.
+
+The current simulation, however, estimates scattering using finite field monitors rather than integrating the complete flux of an infinite plane wave.
+
+In particular, a finite-aperture line monitor samples only part of the transverse field. It may therefore miss some energy because of:
+
+* finite monitor extent;
+* diffraction or nonuniform transverse fields;
+* interference near the interface;
+* numerical reflections;
+* incomplete separation of incident and reflected waves;
+* finite-domain and boundary effects.
+
+For this reason, a flux estimate constructed from the current finite monitor aperture is **not required to satisfy exactly**
+
+```math
+R+T=1.
+```
+
+The analytical value provides the ideal reference, while deviations in the numerical experiment must be interpreted together with the finite geometry and measurement procedure.
 
 ---
 

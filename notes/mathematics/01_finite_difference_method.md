@@ -1,5 +1,13 @@
 # 01 — Finite Difference Method
 
+> **Status:** Foundational Phase 1 note, with implementation details verified
+> through Phase 3.
+>
+> **Scope:** The core derivation uses the homogeneous scalar wave equation.
+> Later phases retain the same finite-difference stencil while adding spatial
+> material maps, controlled source profiles, field monitors, and harmonic
+> analysis.
+
 ## 1. Purpose of this note
 
 The purpose of this note is to explain how the continuous two-dimensional scalar wave equation is transformed into a numerical algorithm that a computer can execute.
@@ -23,11 +31,12 @@ Equivalently:
 u_{tt}=c^2\nabla^2u.
 ```
 
-This equation is continuous in space and time. In principle, the field is defined for every possible value of:
+The current solver also supports a time-independent spatial wave-speed map
+$c(x,y)$. Its governing update is discussed below, and the physical dielectric
+interpretation is developed in the
+[$E_z$ interface note](../physics/02_ez_dielectric_interface_model.md).
 
-```math
-x,\qquad y,\qquad t.
-```
+This equation is continuous in space and time. In principle, the field is defined for every possible value of: $x, y, t.$
 
 A computer cannot store or evaluate an infinite number of spatial and temporal points. The finite difference method replaces the continuous domain with a discrete grid and approximates derivatives using neighboring grid values.
 
@@ -49,11 +58,7 @@ The main numerical concepts introduced in this note are:
 
 ## 2. From continuous space to a grid
 
-In the continuous model, the scalar wave field is written as:
-
-```math
-u(x,y,t).
-```
+In the continuous model, the scalar wave field is written as: $u(x,y,t)$.
 
 In the numerical model, the spatial domain is divided into a rectangular grid.
 
@@ -635,11 +640,15 @@ In code:
 next_field[1:-1, 1:-1] = (
     2.0 * current[1:-1, 1:-1]
     - previous[1:-1, 1:-1]
-    + (c * dt) ** 2 * laplacian[1:-1, 1:-1]
+    + time.dt**2
+    * wave_speed**2
+    * laplacian[1:-1, 1:-1]
 )
 ```
 
-This is the core update equation for the fixed-boundary simulation.
+Here, `wave_speed` is the interior slice of the material wave-speed map. In
+the homogeneous Phase 1 case, every entry equals the same constant $c$. This
+is the core update equation for the fixed-boundary simulation.
 
 ---
 
@@ -756,14 +765,20 @@ u^0
 In code:
 
 ```python
-current = create_gaussian_pulse()
-initial_laplacian = compute_laplacian(current)
+current = create_gaussian_pulse(grid, initial)
+initial_laplacian = compute_laplacian(current, grid)
 
 previous = (
     current
-    + 0.5 * (c * dt) ** 2 * initial_laplacian
+    + 0.5
+    * time.dt**2
+    * material_map.wave_speed**2
+    * initial_laplacian
 )
 ```
+
+The material wave-speed array is constant in the Phase 1 configuration and
+spatially varying in later material scenarios.
 
 This is more accurate than simply setting:
 
@@ -913,14 +928,16 @@ In the code:
 
 ```python
 gamma = damping_profile[1:-1, 1:-1]
+wave_speed = material_map.wave_speed[1:-1, 1:-1]
 
 next_field[1:-1, 1:-1] = (
     2.0 * current[1:-1, 1:-1]
-    - (1.0 - gamma * dt / 2.0)
+    - (1.0 - gamma * time.dt / 2.0)
     * previous[1:-1, 1:-1]
-    + (c * dt) ** 2
+    + time.dt**2
+    * wave_speed**2
     * laplacian[1:-1, 1:-1]
-) / (1.0 + gamma * dt / 2.0)
+) / (1.0 + gamma * time.dt / 2.0)
 ```
 
 When:
@@ -1152,13 +1169,15 @@ cycles per simulation-time unit
 
 rather than cycles per time step.
 
-The source is currently applied directly to one grid point:
+In the Phase 1 implementation, the source was applied directly to one grid
+point:
 
 ```python
 field[source_x, source_y] += source_value
 ```
 
-This produces an approximately circular wave in a homogeneous and isotropic medium.
+This produces an approximately circular wave in a homogeneous and isotropic
+medium.
 
 The source is applied after the normal wave update:
 
@@ -1167,16 +1186,32 @@ u_next = step_wave(u_prev, u_curr)
 apply_source(u_next, frame + 1)
 ```
 
-This is a simple Phase 1 source implementation. It is not yet represented as a separate forcing term in the continuous differential equation.
+This is a simple additive numerical source. It is not represented as a
+separate forcing term in the continuous differential equation.
+
+The current source system generalizes the same operation to a spatial profile
+$P_{i,j}$ and an optional smooth ramp $R(t)$:
+
+```math
+s_{i,j}^{n}
+=
+P_{i,j} A R(t^n)\sin(2\pi f t^n).
+```
+
+The profile may select one point or a finite vertical line. The source remains
+additive and is still injected after the ordinary wave update. See
+[Controlled Sources and Field Monitors](../physics/03_controlled_sources_and_field_monitors.md)
+for the complete Phase 3 source contract.
 
 ---
 
-## 16. Connection to the current code implementation
+## 16. Connection to the solver implementation
 
 The solver advances the field using the following sequence:
 
 ```python
-laplacian = compute_laplacian(current)
+laplacian = compute_laplacian(current, config.grid)
+wave_speed = material_map.wave_speed[1:-1, 1:-1]
 ```
 
 Then either the undamped or damped update is evaluated.
@@ -1187,7 +1222,8 @@ For fixed boundaries:
 next_field[1:-1, 1:-1] = (
     2.0 * current[1:-1, 1:-1]
     - previous[1:-1, 1:-1]
-    + (c * dt) ** 2
+    + time.dt**2
+    * wave_speed**2
     * laplacian[1:-1, 1:-1]
 )
 ```
@@ -1199,12 +1235,16 @@ gamma = damping_profile[1:-1, 1:-1]
 
 next_field[1:-1, 1:-1] = (
     2.0 * current[1:-1, 1:-1]
-    - (1.0 - gamma * dt / 2.0)
+    - (1.0 - gamma * time.dt / 2.0)
     * previous[1:-1, 1:-1]
-    + (c * dt) ** 2
+    + time.dt**2
+    * wave_speed**2
     * laplacian[1:-1, 1:-1]
-) / (1.0 + gamma * dt / 2.0)
+) / (1.0 + gamma * time.dt / 2.0)
 ```
+
+The uniform Phase 1 update is recovered when every entry of `wave_speed` is
+the same constant $c$.
 
 The outer boundary is then forced to zero:
 
@@ -1218,6 +1258,10 @@ A source may then be applied:
 apply_source(next_field, step_index)
 ```
 
+The current implementation supplies a validated, precomputed point or line
+source profile to this operation. Source injection is completed before energy
+is calculated.
+
 Finally, the stored time levels are shifted:
 
 ```python
@@ -1225,6 +1269,10 @@ u_prev, u_curr = u_curr, u_next
 ```
 
 No array copy is required because `step_wave()` creates a new array for `u_next`.
+
+After promotion, each configured field monitor records the completed current
+field. This ordering ensures that monitors observe the same source-injected
+state whose energy was appended for that step.
 
 ---
 
@@ -1418,10 +1466,11 @@ The time step controls how far the simulation advances during each update.
 
 A larger `\Delta t` reduces the number of required steps, but it can make the explicit scheme unstable.
 
-For the two-dimensional wave equation, the current CFL condition is:
+For the two-dimensional variable-speed wave equation, the current CFL
+condition uses the fastest material speed in the domain:
 
 ```math
-c\Delta t
+c_{\max}\Delta t
 \sqrt{
 \frac{1}{\Delta x^2}
 +
@@ -1433,7 +1482,7 @@ c\Delta t
 The code defines:
 
 ```python
-courant = c * dt * np.sqrt(
+courant = maximum_wave_speed * dt * np.sqrt(
     1.0 / dx**2
     + 1.0 / dy**2
 )
@@ -1448,6 +1497,16 @@ if courant > 1.0:
     )
 ```
 
+where
+
+```math
+c_{\max}=\max_{i,j} c_{i,j}.
+```
+
+Using the maximum is necessary because every material cell must satisfy the
+explicit stability bound. For a uniform medium, $c_{\max}=c$ and the Phase 1
+condition is recovered.
+
 For equal spatial spacing:
 
 ```math
@@ -1457,7 +1516,7 @@ For equal spatial spacing:
 the condition becomes:
 
 ```math
-\frac{c\Delta t}{\Delta}
+\frac{c_{\max}\Delta t}{\Delta}
 \leq
 \frac{1}{\sqrt{2}}.
 ```
@@ -1465,7 +1524,7 @@ the condition becomes:
 For the typical parameters:
 
 ```text
-c = 1
+c_max = 1
 dt = 0.4
 dx = dy = 1
 ```
@@ -1616,22 +1675,101 @@ Accuracy improves when:
 
 ## 25. Discrete energy diagnostic
 
-For the scalar wave equation, a useful continuous energy density is:
+The current scalar solver advances the time-independent variable-speed
+equation
+
+```math
+\frac{1}{c(x,y)^2}u_{tt}
+=
+u_{xx}+u_{yy}.
+```
+
+A compatible continuous energy density is
 
 ```math
 \mathcal{E}
 =
-\frac{1}{2}u_t^2
+\frac{1}{2c(x,y)^2}u_t^2
 +
-\frac{1}{2}c^2
+\frac{1}{2}\left(u_x^2+u_y^2\right).
+```
+
+This expression follows by multiplying the equation by $u_t$:
+
+```math
+\frac{1}{c(x,y)^2}u_tu_{tt}
+=
+u_t\left(u_{xx}+u_{yy}\right).
+```
+
+Because the material map is independent of time, the left-hand side is
+
+```math
+\frac{1}{c(x,y)^2}u_tu_{tt}
+=
+\frac{\partial}{\partial t}
 \left(
-u_x^2+u_y^2
+\frac{1}{2c(x,y)^2}u_t^2
 \right).
 ```
 
-The first term is associated with temporal variation.
+For the spatial terms, the product rule gives, for example,
 
-The second term is associated with spatial gradients.
+```math
+u_tu_{xx}
+=
+\frac{\partial}{\partial x}
+\left(
+u_tu_x
+\right)
+-
+\frac{\partial}{\partial t}
+\left(
+\frac{1}{2}u_x^2
+\right),
+```
+
+with an analogous expression in the $y$ direction.
+
+Substituting these relations into the wave equation and grouping the time derivatives leads to the local conservation law
+
+```math
+\frac{\partial \mathcal{E}}{\partial t}
++
+\nabla\cdot\mathbf{S}
+=
+0,
+```
+
+where
+
+```math
+\mathbf{S}
+=
+-u_t\nabla u
+```
+
+represents the spatial flow of wave energy.
+
+The quantity inside the time derivative is therefore identified as the energy density:
+
+```math
+\mathcal{E}
+=
+\frac{1}{2c(x,y)^2}u_t^2
++
+\frac{1}{2}\left(u_x^2+u_y^2\right).
+```
+
+For a uniform medium, multiplying this density and flux by the constant $c^2$
+recovers the equivalent Phase 1 convention
+$\tfrac12u_t^2+\tfrac12c^2|\nabla u|^2$. A spatially varying $c(x,y)$ does not
+permit that factor to be removed globally, so the implementation uses the
+variable-speed form above.
+
+The first term is associated with temporal variation and can be interpreted as a kinetic-like contribution.
+
+The second term is associated with spatial gradients and can be interpreted as a potential-like contribution caused by deformation of the field.
 
 ### 25.1 Time derivative
 
@@ -1703,9 +1841,8 @@ The energy density is calculated using:
 
 ```python
 energy_density = (
-    0.5 * velocity**2
-    + 0.5 * c**2
-    * (
+    0.5 * velocity**2 / material_map.wave_speed**2
+    + 0.5 * (
         gradient_x**2
         + gradient_y**2
     )
@@ -1771,7 +1908,7 @@ The energy can:
 
 ## 26. Normalized units
 
-The current Phase 1 simulation uses normalized units.
+The Phase 1 simulation uses normalized units.
 
 Typical values are:
 
@@ -1873,27 +2010,7 @@ Higher spatial resolution therefore improves accuracy but increases both computa
 
 ---
 
-## 28. Current limitations of the numerical method
-
-The current Phase 1 implementation has several intentional limitations:
-
-* The model is scalar rather than electromagnetic.
-* The finite-difference stencil is second-order accurate.
-* The grid is Cartesian and uniform.
-* The wave speed is constant.
-* The medium is homogeneous.
-* The point source is added directly to the field.
-* The sponge layer is not perfectly matched.
-* Numerical dispersion remains present.
-* The energy diagnostic is approximate.
-* No automated convergence study has yet been performed.
-* No comparison with an analytical solution has yet been implemented.
-
-These limitations are acceptable because Phase 1 is intended to establish the fundamental numerical framework.
-
----
-
-## 29. Summary
+## 28. Summary
 
 The finite difference method transforms the continuous wave equation:
 
@@ -1946,13 +2063,20 @@ The solver also includes:
 
 * second-order initialization for a Gaussian pulse,
 * a zero-field initialization,
-* a continuous sinusoidal point source,
+* continuous sinusoidal point and finite-line sources,
+* reusable spatial source profiles and a smooth turn-on ramp,
 * fixed reflective boundaries,
 * a spatially varying sponge layer,
+* uniform, planar-interface, rectangular, and composite material maps,
 * CFL stability validation,
 * spatial wavelength-resolution diagnostics,
 * temporal source-sampling checks,
-* and approximate energy tracking.
+* approximate energy tracking,
+* named point and line field monitors,
+* and single-frequency harmonic-response analysis.
+
+The harmonic estimator and its numerical-dispersion convention are derived in
+[Harmonic Response Analysis](02_harmonic_response_analysis.md).
 
 The damped update is:
 

@@ -1701,19 +1701,27 @@ notes/physics/
 notes/simulation-logs/
 ```
 
+The roles and maintenance policy for the topical documents are summarized in
+the [Technical Notes Index](notes/READ.md).
+
 Simulation logs record parameter choices, numerical changes, tests, observed
 behavior, limitations, and future work.
 
-The living mathematics notes are:
+The mathematics notes are:
 
-- [Finite Difference Method](notes/mathematics/01_finite_difference_method.md);
-- [Harmonic Response Analysis](notes/mathematics/02_harmonic_response_analysis.md).
+- [Finite Difference Method](notes/mathematics/01_finite_difference_method.md),
+  the Phase 1 foundation with implementation updates through Phase 3;
+- [Harmonic Response Analysis](notes/mathematics/02_harmonic_response_analysis.md),
+  the current Phase 3 analysis reference.
 
-The living physics notes are:
+The physics notes are:
 
-- [Two-Dimensional Wave Equation](notes/physics/01_2d_wave_equation.md);
-- [E_z Dielectric Interface Model](notes/physics/02_ez_dielectric_interface_model.md);
-- [Controlled Sources and Field Monitors](notes/physics/03_controlled_sources_and_field_monitors.md).
+- [Two-Dimensional Wave Equation](notes/physics/01_2d_wave_equation.md),
+  the physical foundation for the homogeneous Phase 1 model;
+- [E_z Dielectric Interface Model](notes/physics/02_ez_dielectric_interface_model.md),
+  the completed Phase 2.3 model decision and interface contract;
+- [Controlled Sources and Field Monitors](notes/physics/03_controlled_sources_and_field_monitors.md),
+  the current Phase 3 source and measurement reference.
 
 The Phase 2 material and geometry documentation includes:
 

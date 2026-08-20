@@ -1,10 +1,17 @@
 # 01 — The Two-Dimensional Wave Equation
 
+> **Status:** Foundational Phase 1 note.
+>
+> **Scope:** The homogeneous scalar-wave model used to establish propagation,
+> sources, boundaries, and diagnostics. Material interfaces and controlled
+> Phase 3 measurements are documented in the later physics notes.
+
 ## 1. Purpose of this note
 
 The purpose of this note is to explain the physical meaning of the wave equation used in Phase 1 of the Photonics Simulator project.
 
-The current simulator does not yet solve the complete Maxwell equations. Instead, it solves a simplified scalar wave equation in two spatial dimensions.
+The project does not solve the complete Maxwell equations. Its Phase 1 model
+solves a simplified scalar wave equation in two spatial dimensions.
 
 This model is a useful first step for introducing:
 
@@ -63,7 +70,7 @@ The equation states that the field changes in time according to how it differs f
 
 ## 3. The scalar field
 
-The variable `u` in the current simulation is a scalar field:
+The variable `u` in the Phase 1 model is a scalar field:
 
 ```math
 u=u(x,y,t).
@@ -99,14 +106,20 @@ E_z\hat{\mathbf{z}}.
 
 The scalar variable `u` does not independently represent all components of the electric or magnetic field.
 
-Instead, it should be interpreted as a simplified wave amplitude. Under suitable assumptions, a scalar equation can resemble the behavior of one field component, but the Phase 1 model does not yet include:
+Within Phase 1, it should be interpreted as a simplified wave amplitude.
+Under suitable assumptions, a scalar equation can resemble the behavior of
+one field component, but the Phase 1 model does not include:
 
 * electromagnetic polarization,
 * electric-magnetic field coupling,
 * vector boundary conditions,
 * or the complete material relations of electromagnetism.
 
-The scalar model is being used to establish the fundamental behavior of numerical wave propagation before introducing those additional complexities.
+The scalar model was used to establish the fundamental behavior of numerical
+wave propagation before introducing those additional complexities. Phase 2
+subsequently selected the more specific interpretation $u=E_z$ for the
+out-of-plane electric-field component under the assumptions documented in the
+[$E_z$ Dielectric Interface Model](02_ez_dielectric_interface_model.md).
 
 ---
 
@@ -245,9 +258,9 @@ The normalized model preserves the important relationships between:
 
 ---
 
-## 7. Assumption of a homogeneous and isotropic medium
+## 7. Phase 1 assumption of a homogeneous and isotropic medium
 
-The current model assumes:
+The Phase 1 model assumes:
 
 ```math
 c=\text{constant}.
@@ -284,7 +297,10 @@ Spatially varying material properties can produce:
 * resonance,
 * and confinement.
 
-These effects are reserved for later phases of the project.
+These effects were reserved for later phases of the project. Phase 2 now
+introduces spatial material maps, dielectric interfaces, and reusable
+geometries; see the
+[$E_z$ Dielectric Interface Model](02_ez_dielectric_interface_model.md).
 
 ---
 
@@ -389,9 +405,10 @@ source_type = "point_sine"
 
 ---
 
-## 9. Continuous sinusoidal point source
+## 9. Phase 1 continuous sinusoidal point source
 
-The simulator supports a continuous sinusoidal source applied at one selected grid point.
+The Phase 1 configuration supports a continuous sinusoidal source applied at
+one selected grid point.
 
 Its temporal dependence is:
 
@@ -412,7 +429,8 @@ The source is placed at:
 (x_s,y_s).
 ```
 
-In the current implementation, its value is added directly to the field at that point during every time step.
+In the Phase 1 implementation, its value is added directly to the field at
+that point during every time step.
 
 A point-like source in a homogeneous and isotropic two-dimensional medium generates approximately circular outgoing wavefronts.
 
@@ -426,7 +444,9 @@ The amplitude `A` controls the magnitude of the excitation.
 
 Increasing the source amplitude generally increases the wave amplitude and the energy introduced into the domain.
 
-Because the wave equation is linear in the current Phase 1 model, multiplying the source amplitude by a constant should approximately multiply the generated field amplitude by the same constant.
+Because the wave equation is linear in the Phase 1 model, multiplying the
+source amplitude by a constant should approximately multiply the generated
+field amplitude by the same constant.
 
 ### 9.2 Source frequency
 
@@ -506,7 +526,8 @@ The word *nominal* is used because the finite-difference discretization introduc
 
 ### 9.4 Simplified nature of the source
 
-The current point source is a numerical excitation, not a complete physical model of an electromagnetic emitter.
+The Phase 1 point source is a numerical excitation, not a complete physical
+model of an electromagnetic emitter.
 
 It does not explicitly include:
 
@@ -518,6 +539,10 @@ It does not explicitly include:
 * or coupling between electric and magnetic fields.
 
 It is sufficient for Phase 1 because its purpose is to generate a controlled wave and test the propagation and boundary behavior of the scalar solver.
+
+Phase 3 retains this additive point-source mode and also provides a
+finite-aperture line source, a smooth turn-on envelope, and field monitors. See
+[Controlled Sources and Field Monitors](03_controlled_sources_and_field_monitors.md).
 
 ---
 
@@ -633,7 +658,7 @@ The sponge boundary reduces reflections, but it does not eliminate them complete
 
 It is not a perfectly matched layer.
 
-A PML is designed so that, in the ideal continuous formulation, waves enter the layer without seeing an impedance mismatch at the interface.
+A PML (Perfectly Matched Layer) is designed so that, in the ideal continuous formulation, waves enter the layer without seeing an impedance mismatch at the interface.
 
 A simple sponge does not have this exact matching property.
 
@@ -966,7 +991,7 @@ When the waves have the same sign at a point, they interfere constructively.
 
 When they have opposite signs, they interfere destructively.
 
-In the current simulator, interference occurs between:
+In the Phase 1 scenarios, interference occurs between:
 
 * successive wavefronts from the continuous source,
 * outgoing and reflected waves,
@@ -1329,7 +1354,7 @@ Therefore, the Phase 1 scalar model should be understood as preparation for elec
 
 ---
 
-## 28. Current physical limitations
+## 28. Phase 1 physical limitations
 
 The Phase 1 wave model has the following intentional limitations:
 
@@ -1354,9 +1379,9 @@ These limitations are appropriate for Phase 1 because the objective is to establ
 
 ---
 
-## 29. What Phase 1 currently demonstrates
+## 29. What Phase 1 demonstrated
 
-The current Phase 1 simulator successfully demonstrates:
+The Phase 1 simulator successfully demonstrated:
 
 * propagation from a localized initial disturbance,
 * circular waves from a continuous point source,
@@ -1391,7 +1416,7 @@ c^2
 
 It describes how the temporal acceleration of a scalar field is determined by its spatial curvature.
 
-The current simulator supports:
+The Phase 1 configuration supports:
 
 * a Gaussian initial pulse,
 * a zero initial field,
@@ -1400,6 +1425,12 @@ The current simulator supports:
 * a sponge absorbing layer,
 * field animation,
 * and energy diagnostics.
+
+The current project retains these foundations and adds spatial material maps,
+dielectric interfaces, rectangular and composite geometries, controlled line
+sources, named field monitors, and harmonic-response analysis. The later notes
+document those extensions without changing the role of this note as the
+physical foundation for Phase 1.
 
 For a Gaussian pulse without a source, normalized energy:
 

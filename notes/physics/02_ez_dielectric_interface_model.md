@@ -1,14 +1,26 @@
 # 2D $E_z$-Polarized Dielectric Interface Model
 
+> **Status:** Completed Phase 2.3 design record, with current-status notes
+> through Phase 3.
+>
+> **Scope:** The physical interpretation, governing equation, interface
+> conditions, and implementation contract selected for the first planar
+> dielectric interface.
+
 ## 1. Purpose
 
 This note defines the physical interpretation selected for Phase 2.3 of the
 Photonics Simulator project.
 
 Phase 2.2 introduced spatial refractive-index and wave-speed maps while keeping
-the domain uniform. Phase 2.3 will place one planar discontinuity in that map.
-Before introducing the discontinuity, the scalar field, governing equation,
-and interface conditions must be defined explicitly.
+the domain uniform. Phase 2.3 placed one planar discontinuity in that map. This
+design record defines the scalar field, governing equation, and interface
+conditions selected before that implementation was completed.
+
+Phase 3 later added a finite-aperture line source, field monitors, harmonic
+analysis, and paired reference/interface measurements. Those extensions are
+documented in
+[Controlled Sources and Field Monitors](03_controlled_sources_and_field_monitors.md).
 
 The selected interpretation is:
 
@@ -519,14 +531,17 @@ The corresponding ideal reflected power fraction is:
 R=|r|^2=0.04.
 ```
 
-These analytical values are useful future references, but Phase 2.3 will not
-claim that the current point-source simulation has measured them accurately.
+These analytical values served as useful references, but the Phase 2.3
+point-source simulation did not claim to measure them accurately. Phase 3
+uses the same ideal coefficients when interpreting its controlled, but still
+finite-aperture, paired measurement.
 
 ---
 
-## 10. Source limitation
+## 10. Phase 2.3 source limitation
 
-The current `point_sine` source radiates in many directions.
+The `point_sine` source used by the Phase 2.3 interface scenario radiates in
+many directions.
 
 It is useful for observing:
 
@@ -545,13 +560,18 @@ coefficient because:
 4. The source continues injecting energy.
 5. The sponge and finite domain influence the observed field.
 
-Quantitative Fresnel validation should wait for a controlled excitation such
-as:
+These limitations motivated a controlled excitation such as:
 
 - a line source;
 - a finite-width beam;
 - a plane-wave-like source;
 - or a total-field/scattered-field formulation.
+
+Phase 3 implemented the first option as a finite-aperture `line_sine` source,
+together with field monitors and paired uniform-reference/interface runs. It
+supports reproducible approximate field-amplitude and aperture-flux estimates,
+but it is not an exact infinite plane wave, a total-field/scattered-field
+source, or a complete-domain flux measurement.
 
 ---
 
@@ -641,7 +661,7 @@ n >= 1
 
 the lowest-index material has the highest wave speed.
 
-For the planned interface:
+For the Phase 2.3 interface:
 
 ```text
 n_left = 1.0
@@ -664,8 +684,7 @@ adequately resolve material 2.
 
 ## 13. Boundary and geometry placement
 
-The material interface should remain well inside the non-damped physical
-region.
+The material interface is kept well inside the non-damped physical region.
 
 The transmitted field needs enough distance to propagate after crossing the
 interface before entering the sponge.
@@ -678,14 +697,10 @@ ny = 150
 damping_width = 50
 ```
 
-This leaves a relatively narrow undamped central region. A dedicated Phase 2.3
-scenario should therefore use either:
+This leaves a relatively narrow undamped central region. The dedicated Phase
+2.3 scenario therefore uses both a larger grid and a narrower sponge.
 
-- a larger grid;
-- a narrower sponge;
-- or both.
-
-A reasonable initial qualitative scenario is:
+The implemented qualitative scenario uses:
 
 ```text
 nx = 240
@@ -705,29 +720,30 @@ n_right = 1.5
 This places the source, interface, and transmitted region away from the sponge
 while preserving the stable default spatial and temporal step sizes.
 
-These values are initial design parameters and should be adjusted after visual
-inspection.
+These values were validated visually and retained by the Phase 2.3 scenario.
+The later Phase 3 measurement scenario uses a larger domain and different
+source and monitor positions for its paired experiment.
 
 ---
 
-## 14. Phase 2.3 implementation contract
+## 14. Phase 2.3 implementation contract — completed
 
-Phase 2.3 should implement only one grid-aligned planar interface.
+Phase 2.3 deliberately implemented only one grid-aligned planar interface.
 
-The initial implementation should:
+The completed checkpoint:
 
-1. Preserve the default uniform-material simulation.
-2. Add a planar-interface material-map constructor.
-3. Use an explicit convention for which cells belong to each material.
-4. Validate the interface index and both refractive indices.
-5. Allow an active simulation to receive the constructed material map.
-6. Add a separate planar-interface scenario file.
-7. Display the interface through the existing material visualization.
-8. Preserve the Phase 2.1 numerical regression.
-9. Add tests for map shape, orientation, values, and wave speeds.
-10. Restrict interpretation to qualitative interface behavior.
+1. Preserved the default uniform-material simulation.
+2. Added a planar-interface material-map constructor.
+3. Used an explicit convention for which cells belong to each material.
+4. Validated the interface index and both refractive indices.
+5. Allowed an active simulation to receive the constructed material map.
+6. Added a separate planar-interface scenario file.
+7. Displayed the interface through the existing material visualization.
+8. Preserved the Phase 2.1 numerical regression.
+9. Added tests for map shape, orientation, values, and wave speeds.
+10. Restricted its interpretation to qualitative interface behavior.
 
-Phase 2.3 should not yet add:
+At that checkpoint, Phase 2.3 explicitly deferred:
 
 - rectangular objects;
 - reusable general geometry registries;
@@ -739,13 +755,17 @@ Phase 2.3 should not yet add:
 - automated Fresnel-coefficient measurements;
 - a full vector Maxwell solver.
 
-Those additions belong to later phases.
+Later Phase 2 checkpoints added rectangular objects and reusable geometry
+functions. Phase 3 added a finite line source and an approximate paired
+interface measurement. Arbitrary rotated geometry, material dispersion,
+magnetic materials, PML, an exact plane-wave or total-field/scattered-field
+source, and a full vector Maxwell solver remain future work.
 
 ---
 
-## 15. Required Phase 2.3 tests
+## 15. Phase 2.3 completion tests
 
-At minimum, the planar-interface tests should confirm:
+The planar-interface tests completed for Phase 2.3 confirm:
 
 1. The material arrays have `grid.shape`.
 2. Cells before the interface contain $n_{\mathrm{left}}$.
@@ -788,7 +808,7 @@ component rather than the staggered first-order Maxwell system.
 
 ## 17. Selected decision
 
-Phase 2.3 will use the following model:
+Phase 2.3 selected and implemented the following model:
 
 ```text
 Field:
@@ -816,13 +836,13 @@ Interface conditions:
     E_z continuous
     normal derivative of E_z continuous
 
-Initial Phase 2.3 use:
+Phase 2.3 use:
     qualitative reflection, transmission, and wavelength observation
 ```
 
-This decision permits the existing Phase 2.2 spatial update to be used for the
-first planar interface without changing to a different variable-coefficient
-operator.
+This decision permitted the existing Phase 2.2 spatial update to be used for
+the first planar interface without changing to a different
+variable-coefficient operator. The current solver continues to use this model.
 
 ---
 
@@ -846,8 +866,8 @@ The following sources support the polarization and interface model:
 
 ## 19. Summary
 
-The scalar field used by the project now has a precise Phase 2.3
-interpretation:
+In Phase 2.3, the project gave its scalar field the physical interpretation
+that the current solver retains:
 
 ```math
 u(x,y,t)=E_z(x,y,t).
@@ -869,8 +889,9 @@ E_{z,tt}
 At a dielectric interface, $E_z$ and its normal derivative are continuous
 under the selected assumptions.
 
-This model justifies using the existing Phase 2.2 variable-speed scalar update
-for the first planar dielectric interface. It also establishes clear limits:
-the current source and energy diagnostic are suitable for qualitative
-interface study and regression testing, but not yet for a complete
-quantitative Maxwell or Fresnel analysis.
+This model justified using the Phase 2.2 variable-speed scalar update for the
+first planar dielectric interface. The Phase 2.3 point source and scalar
+energy diagnostic were suitable for qualitative interface study and
+regression testing. Phase 3 adds controlled finite-aperture excitation and
+paired harmonic measurements, but the project still does not claim a complete
+quantitative Maxwell or exact Fresnel-flux analysis.

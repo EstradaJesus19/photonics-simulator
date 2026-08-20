@@ -109,21 +109,26 @@ Use the following policy:
 - add a clearly dated erratum for a substantive factual error;
 - link to a newer mathematics or physics note when the interpretation has
   evolved;
-- keep the root README and topical notes current.
+- keep the root README current and the scope and status of topical notes
+  accurate.
 
-This preserves development history while allowing the living technical
+This preserves development history while allowing the topical technical
 documentation to improve.
 
 ---
 
 ## Relationship to topical notes
 
-Reusable derivations and current scientific interpretations belong in:
+Foundational derivations, completed model decisions, and current scientific
+interpretations belong in:
 
 ```text
 notes/mathematics/
 notes/physics/
 ```
+
+Their individual roles and maintenance policy are listed in the
+[Technical Notes Index](../READ.md).
 
 The Phase 3 topics are explained in:
 
