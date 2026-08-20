@@ -9,7 +9,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 
-from simulations.wave2d_controlled_line_source import (
+from simulations.measurements.wave2d_controlled_line_source import (
     ANALYSIS_START_STEP,
     ANALYSIS_STOP_STEP,
     create_scenario,

@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from simulations.wave2d_controlled_line_source import (
+from simulations.measurements.wave2d_controlled_line_source import (
     ANALYSIS_START_STEP,
     ANALYSIS_STOP_STEP,
     FIRST_MONITOR_X,

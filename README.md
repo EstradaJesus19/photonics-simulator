@@ -244,28 +244,25 @@ photonics-simulator/
 |   |-- sources.py
 |   `-- visualization.py
 |-- simulations/
+|   |-- foundations/
+|   |   `-- wave2d_basic.py
+|   |-- materials/
+|   |   |-- wave2d_composite_geometry.py
+|   |   |-- wave2d_planar_interface.py
+|   |   `-- wave2d_rectangular_dielectric.py
+|   |-- measurements/
+|   |   |-- wave2d_controlled_line_source.py
+|   |   `-- wave2d_interface_measurement.py
 |   |-- __init__.py
-|   |-- wave2d_basic.py
-|   |-- wave2d_composite_geometry.py
-|   |-- wave2d_controlled_line_source.py
-|   |-- wave2d_interface_measurement.py
-|   |-- wave2d_planar_interface.py
-|   `-- wave2d_rectangular_dielectric.py
+|   `-- READ.md
 |-- tests/
-|   |-- test_composite_geometry_scenario.py
-|   |-- test_controlled_line_source_scenario.py
-|   |-- test_interface_measurement_scenario.py
-|   |-- test_materials.py
-|   |-- test_monitors.py
-|   |-- test_analysis.py
-|   |-- test_monitor_visualization.py
-|   |-- test_phase2_1_regression.py
-|   |-- test_phase2_validation.py
-|   |-- test_phase3_validation.py
-|   |-- test_planar_interface_scenario.py
-|   |-- test_sources.py
-|   `-- test_rectangular_dielectric_scenario.py
+|   |-- unit/
+|   |-- scenarios/
+|   |-- validation/
+|   |-- __init__.py
+|   `-- READ.md
 |-- notes/
+|   |-- READ.md
 |   |-- mathematics/
 |   |-- physics/
 |   `-- simulation-logs/
@@ -344,36 +341,40 @@ headless workflows.
 - monitor-history and analysis-window plotting;
 - the interactive simulation workflow.
 
-`simulations/wave2d_basic.py`
+The executable scenarios are grouped by purpose in
+[simulations/READ.md](simulations/READ.md): foundational propagation,
+dielectric material geometries, and controlled measurements.
+
+`simulations/foundations/wave2d_basic.py`
 
 - a thin executable entry point that creates the default configuration and
   launches the interactive workflow.
 
-`simulations/wave2d_planar_interface.py`
+`simulations/materials/wave2d_planar_interface.py`
 
 - a headless-compatible scenario constructor;
 - a \(240\times160\) interface experiment;
 - a thin interactive entry point for the Phase 2.3 simulation.
 
-`simulations/wave2d_rectangular_dielectric.py`
+`simulations/materials/wave2d_rectangular_dielectric.py`
 
 - a headless-compatible scenario constructor;
 - a \(240\times160\) finite dielectric-object experiment;
 - a thin interactive entry point for the Phase 2.4 simulation.
 
-`simulations/wave2d_composite_geometry.py`
+`simulations/materials/wave2d_composite_geometry.py`
 
 - a headless-compatible scenario constructor;
 - a nested \(n=1.5\) outer region and \(n=2.0\) core;
 - a thin interactive entry point for the Phase 2.5 simulation.
 
-`simulations/wave2d_controlled_line_source.py`
+`simulations/measurements/wave2d_controlled_line_source.py`
 
 - a headless-compatible uniform-medium scenario constructor;
 - a ramped finite-aperture line source and two coherent line monitors;
 - numerical phase validation and an interactive visualization entry point.
 
-`simulations/wave2d_interface_measurement.py`
+`simulations/measurements/wave2d_interface_measurement.py`
 
 - matched uniform-reference and dielectric-interface construction;
 - headless paired execution;
@@ -1023,43 +1024,43 @@ Run commands from the repository root.
 Activate the virtual environment, then run the default uniform simulation:
 
 ```powershell
-python -m simulations.wave2d_basic
+python -m simulations.foundations.wave2d_basic
 ```
 
 Run the Phase 2.3 planar-interface scenario with:
 
 ```powershell
-python -m simulations.wave2d_planar_interface
+python -m simulations.materials.wave2d_planar_interface
 ```
 
 Run the Phase 2.4 rectangular-dielectric scenario with:
 
 ```powershell
-python -m simulations.wave2d_rectangular_dielectric
+python -m simulations.materials.wave2d_rectangular_dielectric
 ```
 
 Run the Phase 2.5 composite-geometry scenario with:
 
 ```powershell
-python -m simulations.wave2d_composite_geometry
+python -m simulations.materials.wave2d_composite_geometry
 ```
 
 Run the Phase 3 controlled line-source scenario with:
 
 ```powershell
-python -m simulations.wave2d_controlled_line_source
+python -m simulations.measurements.wave2d_controlled_line_source
 ```
 
 Run the paired Phase 3 reference/interface measurement headlessly with:
 
 ```powershell
-python -m simulations.wave2d_interface_measurement
+python -m simulations.measurements.wave2d_interface_measurement
 ```
 
 Module execution is required because `simulations` imports the reusable
 top-level `wavesim` package. Direct execution such as
-`python simulations\wave2d_basic.py` may not include the repository root in the
-module search path.
+`python simulations\foundations\wave2d_basic.py` may not include the
+repository root in the module search path.
 
 The interactive workflow:
 
@@ -1433,8 +1434,11 @@ than the single-rectangle scenario.
 From the repository root:
 
 ```powershell
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -t . -v
 ```
+
+The focused unit, scenario, and cross-cutting validation commands are listed
+in [tests/READ.md](tests/READ.md).
 
 The tests cover:
 

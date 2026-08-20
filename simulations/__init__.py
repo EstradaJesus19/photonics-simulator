@@ -1,1 +1,1 @@
-"""Executable simulation configurations."""
+"""Purpose-grouped executable simulation configurations."""

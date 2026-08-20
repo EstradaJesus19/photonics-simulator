@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from simulations.wave2d_interface_measurement import (
+from simulations.measurements.wave2d_interface_measurement import (
     ANALYSIS_START_STEP,
     ANALYSIS_STOP_STEP,
     DOWNSTREAM_MONITOR_X,

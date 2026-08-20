@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from simulations.wave2d_rectangular_dielectric import (
+from simulations.materials.wave2d_rectangular_dielectric import (
     RECTANGLE_REFRACTIVE_INDEX,
     RECTANGLE_X_START,
     RECTANGLE_X_STOP,

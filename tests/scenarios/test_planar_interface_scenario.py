@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from simulations.wave2d_planar_interface import (
+from simulations.materials.wave2d_planar_interface import (
     INTERFACE_INDEX,
     RIGHT_REFRACTIVE_INDEX,
     create_scenario,

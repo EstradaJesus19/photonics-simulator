@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from simulations.wave2d_composite_geometry import (
+from simulations.materials.wave2d_composite_geometry import (
     CORE_REFRACTIVE_INDEX,
     CORE_X_START,
     CORE_X_STOP,

@@ -8,13 +8,13 @@ import wavesim
 
 from dataclasses import replace
 
-from simulations.wave2d_composite_geometry import (
+from simulations.materials.wave2d_composite_geometry import (
     create_scenario as create_composite_scenario,
 )
-from simulations.wave2d_planar_interface import (
+from simulations.materials.wave2d_planar_interface import (
     create_scenario as create_planar_scenario,
 )
-from simulations.wave2d_rectangular_dielectric import (
+from simulations.materials.wave2d_rectangular_dielectric import (
     create_scenario as create_rectangle_scenario,
 )
 from wavesim.config import (

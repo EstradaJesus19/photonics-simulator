@@ -5,10 +5,10 @@ import unittest
 import numpy as np
 
 import wavesim
-from simulations.wave2d_controlled_line_source import (
+from simulations.measurements.wave2d_controlled_line_source import (
     create_scenario as create_controlled_scenario,
 )
-from simulations.wave2d_interface_measurement import (
+from simulations.measurements.wave2d_interface_measurement import (
     create_scenario_pair,
 )
 from wavesim.solver import Wave2DSimulation

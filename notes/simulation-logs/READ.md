@@ -115,6 +115,12 @@ Use the following policy:
 This preserves development history while allowing the topical technical
 documentation to improve.
 
+File paths and commands inside a historical log likewise describe the
+repository layout at that checkpoint. Use the current
+[simulation index](../../simulations/READ.md),
+[test-suite index](../../tests/READ.md), and root README for executable paths
+after later reorganizations.
+
 ---
 
 ## Relationship to topical notes

@@ -1258,8 +1258,8 @@ wavesim/visualization.py
 The official Phase 3 scenarios are:
 
 ```text
-simulations/wave2d_controlled_line_source.py
-simulations/wave2d_interface_measurement.py
+simulations/measurements/wave2d_controlled_line_source.py
+simulations/measurements/wave2d_interface_measurement.py
 ```
 
 ---
