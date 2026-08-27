@@ -1,10 +1,19 @@
 """Material maps for the 2D scalar-wave solver."""
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from numbers import Real
 
 import numpy as np
 
 from .config import GridConfig, MaterialConfig
+from .geometry import (
+    create_circular_mask,
+    create_elliptical_mask,
+    create_polygon_mask,
+    create_rectangular_mask,
+    validate_geometry_mask,
+)
 
 
 @dataclass
@@ -13,6 +22,63 @@ class MaterialMap:
 
     refractive_index: np.ndarray
     wave_speed: np.ndarray
+
+
+@dataclass(frozen=True)
+class MaterialRegion:
+    """One immutable geometry mask and its refractive index."""
+
+    mask: np.ndarray = field(repr=False)
+    refractive_index: float
+
+    def __post_init__(self) -> None:
+        """Validate and defensively copy the region definition."""
+        if not isinstance(self.mask, np.ndarray):
+            raise TypeError(
+                "Material-region mask must be a NumPy array."
+            )
+
+        if not np.issubdtype(self.mask.dtype, np.bool_):
+            raise TypeError(
+                "Material-region mask must have boolean dtype."
+            )
+
+        if not np.any(self.mask):
+            raise ValueError(
+                "Material-region mask must select at least "
+                "one grid sample."
+            )
+
+        if (
+            isinstance(self.refractive_index, bool)
+            or not isinstance(self.refractive_index, Real)
+        ):
+            raise TypeError(
+                "Material-region refractive index must be "
+                "a real scalar."
+            )
+
+        if (
+            not np.isfinite(self.refractive_index)
+            or self.refractive_index <= 0
+        ):
+            raise ValueError(
+                "Material-region refractive index must be "
+                "finite and positive."
+            )
+
+        mask_copy = np.array(
+            self.mask,
+            dtype=bool,
+            copy=True,
+        )
+        mask_copy.setflags(write=False)
+
+        object.__setattr__(
+            self,
+            "mask",
+            mask_copy,
+        )
 
 
 def validate_refractive_index_array(
@@ -194,6 +260,40 @@ def add_rectangular_region(
     return updated_refractive_index
 
 
+def add_masked_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    mask: np.ndarray,
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with a refractive index applied through a mask.
+
+    The boolean mask follows the grid's ``(x, y)`` array orientation. A later
+    operation overwrites earlier values wherever its mask is true.
+    """
+    validate_refractive_index_array(refractive_index, grid)
+    validate_geometry_mask(mask, grid)
+
+    if (
+        not np.isfinite(region_refractive_index)
+        or region_refractive_index <= 0
+    ):
+        raise ValueError(
+            "region_refractive_index must be finite and positive."
+        )
+
+    updated_refractive_index = np.array(
+        refractive_index,
+        dtype=float,
+        copy=True,
+    )
+    updated_refractive_index[mask] = region_refractive_index
+
+    validate_refractive_index_array(updated_refractive_index, grid)
+    return updated_refractive_index
+
+
 def create_uniform_material_map(
     grid: GridConfig,
     material: MaterialConfig,
@@ -343,3 +443,160 @@ def create_rectangular_material_map(
         material,
         refractive_index,
     )
+
+
+def add_elliptical_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    center_x: float,
+    center_y: float,
+    radius_x: float,
+    radius_y: float,
+    angle_degrees: float = 0.0,
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with one filled, possibly rotated ellipse applied."""
+    mask = create_elliptical_mask(
+        grid,
+        center_x=center_x,
+        center_y=center_y,
+        radius_x=radius_x,
+        radius_y=radius_y,
+        angle_degrees=angle_degrees,
+    )
+
+    return add_masked_region(
+        refractive_index,
+        grid,
+        mask=mask,
+        region_refractive_index=region_refractive_index,
+    )
+
+
+def add_circular_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    center_x: float,
+    center_y: float,
+    radius: float,
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with one filled circle applied."""
+    mask = create_circular_mask(
+        grid,
+        center_x=center_x,
+        center_y=center_y,
+        radius=radius,
+    )
+
+    return add_masked_region(
+        refractive_index,
+        grid,
+        mask=mask,
+        region_refractive_index=region_refractive_index,
+    )
+
+
+def add_physical_rectangular_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    center_x: float,
+    center_y: float,
+    width: float,
+    height: float,
+    angle_degrees: float = 0.0,
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with one physical-coordinate rectangle applied."""
+    mask = create_rectangular_mask(
+        grid,
+        center_x=center_x,
+        center_y=center_y,
+        width=width,
+        height=height,
+        angle_degrees=angle_degrees,
+    )
+
+    return add_masked_region(
+        refractive_index,
+        grid,
+        mask=mask,
+        region_refractive_index=region_refractive_index,
+    )
+
+
+def add_polygonal_region(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    vertices: Sequence[tuple[float, float]],
+    region_refractive_index: float,
+) -> np.ndarray:
+    """Return a copy with one filled simple polygon applied."""
+    mask = create_polygon_mask(
+        grid,
+        vertices=vertices,
+    )
+
+    return add_masked_region(
+        refractive_index,
+        grid,
+        mask=mask,
+        region_refractive_index=region_refractive_index,
+    )
+
+
+def compose_material_regions(
+    refractive_index: np.ndarray,
+    grid: GridConfig,
+    *,
+    regions: Sequence[MaterialRegion],
+) -> np.ndarray:
+    """Apply an ordered collection of material regions.
+
+    The input refractive-index array is not modified. Regions are applied in
+    sequence, and later regions overwrite earlier ones where masks overlap.
+    An empty sequence returns an unchanged defensive floating-point copy.
+    """
+    validate_refractive_index_array(
+        refractive_index,
+        grid,
+    )
+
+    updated_refractive_index = np.array(
+        refractive_index,
+        dtype=float,
+        copy=True,
+    )
+
+    for index, region in enumerate(regions):
+        if not isinstance(region, MaterialRegion):
+            raise TypeError(
+                "regions must contain only MaterialRegion "
+                f"instances; item {index} is invalid."
+            )
+
+        try:
+            validate_geometry_mask(
+                region.mask,
+                grid,
+            )
+        except (TypeError, ValueError) as error:
+            raise ValueError(
+                f"Material region {index} is not aligned "
+                "with the simulation grid."
+            ) from error
+
+        updated_refractive_index[
+            region.mask
+        ] = region.refractive_index
+
+    validate_refractive_index_array(
+        updated_refractive_index,
+        grid,
+    )
+
+    return updated_refractive_index

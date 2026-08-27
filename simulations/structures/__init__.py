@@ -1,0 +1,1 @@
+"""Photonic-structure simulation scenarios."""

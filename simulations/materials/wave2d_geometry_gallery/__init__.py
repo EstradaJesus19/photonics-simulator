@@ -1,0 +1,1 @@
+"""Advanced two-dimensional geometry gallery."""

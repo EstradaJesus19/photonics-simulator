@@ -36,8 +36,14 @@ notes/simulation-logs/
 |   |-- 2026-07-29_003_rectangular_dielectric_region.md
 |   |-- 2026-07-30_004_reusable_geometry_functions.md
 |   `-- 2026-07-30_005_phase_2_validation.md
-`-- phase_3/
-    `-- 2026-08-04_001_controlled_sources_and_field_monitors.md
+|-- phase_3/
+|   `-- 2026-08-04_001_controlled_sources_and_field_monitors.md
+`-- phase_4/
+    |-- 2026-08-20_001_geometry_conventions_and_baseline.md
+    |-- 2026-08-25_002_advanced_geometry_and_straight_waveguide.md
+    |-- 2026-08-27_003_directional_coupler.md
+    |-- 2026-08-27_004_visualization_and_reproducible_examples.md
+    `-- 2026-08-27_005_phase_4_validation_and_closeout.md
 ```
 
 ---
@@ -73,6 +79,24 @@ notes/simulation-logs/
   profiles, the ramped finite-aperture line source, field monitors, harmonic
   analysis, controlled propagation, paired interface measurement,
   visualization, limitations, and closeout status.
+
+### Phase 4 — Advanced geometry and photonic structures
+
+- `2026-08-20_001_geometry_conventions_and_baseline.md` defines the coordinate,
+  mask, clipping, validation, and ordered-composition rules used by advanced
+  geometry operations.
+- `2026-08-25_002_advanced_geometry_and_straight_waveguide.md` records the
+  advanced geometry operations, material-region composition, and matched
+  straight-waveguide experiment.
+- `2026-08-27_003_directional_coupler.md` records the matched isolated-guide
+  and directional-coupler experiment, measured spatial field transfer,
+  focused validation, and reproducible figures.
+- `2026-08-27_004_visualization_and_reproducible_examples.md` records the
+  advanced-geometry gallery, reproducible visualization workflow, validation,
+  and the decision to retain separate figure-generation commands.
+- `2026-08-27_005_phase_4_validation_and_closeout.md` records the complete
+  220-test audit, public-API and repository checks, scientific limitations,
+  and final Phase 4 status.
 
 ---
 

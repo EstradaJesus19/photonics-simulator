@@ -10,9 +10,10 @@ FDTD methods.
 
 ## Current status
 
-**Phase 3 - Controlled sources and field monitors is complete and
-validated. The local milestone commit and tag identify this state; pushing is
-handled separately.**
+**Phase 4 - Advanced geometry and photonic structures is complete. It adds
+physical-coordinate geometry masks, ordered material composition, matched
+waveguide experiments, and reproducible visualization while preserving the
+validated scalar-wave solver.**
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -46,6 +47,21 @@ handled separately.**
   shaded harmonic-analysis windows.
 - Phase 3.9 defines the stable Phase 3 API and completes cross-feature
   validation, technical documentation, and the final repository audit.
+- Phase 4.1 defines physical grid-coordinate arrays, validated Boolean geometry
+  masks, immutable masked material operations, and ordered overlap semantics.
+- Phase 4.2 adds circular and elliptical material regions.
+- Phase 4.3 adds rotated rectangular and elliptical regions using physical
+  counterclockwise angles.
+- Phase 4.4 adds validated convex and concave simple polygons.
+- Phase 4.5 adds immutable `MaterialRegion` definitions and ordered batch
+  composition.
+- Phase 4.6 validates a matched straight dielectric-waveguide experiment.
+- Phase 4.7 demonstrates spatial field transfer in a two-guide directional
+  coupler.
+- Phase 4.8 adds a reproducible advanced-geometry gallery and completes the
+  Phase 4 visualization set.
+- Phase 4.9 completes the full test, documentation, artifact, path, and public-
+  API audit.
 
 The default uniform simulation and continuous point source remain numerically
 identical to the verified Phase 2.1 simulation. The Phase 2 material scenarios
@@ -63,9 +79,10 @@ amplitude consistency and numerical phase advance. The paired experiment
 isolates the reflected response by subtracting the matched uniform reference
 from the upstream interface response.
 
-The Phase 2 baseline contains 59 tests. The completed Phase 3 suite contains
-139 tests spanning the Phase 2 contract and the new source, monitor,
-harmonic-analysis, scenario, visualization, and public-API behavior. All 139
+The Phase 2 baseline contains 59 tests, and the Phase 3 milestone contained
+139 tests. The completed Phase 4 suite contains 220 tests spanning geometry,
+materials, sources, monitors, harmonic analysis, scenarios, visualization,
+figure generation, numerical regressions, and public-API behavior. All 220
 tests pass. The Phase 2 source-free composite energy result remains within a
 maximum observed deviation of approximately 2.8%.
 
@@ -1057,6 +1074,42 @@ Run the paired Phase 3 reference/interface measurement headlessly with:
 python -m simulations.measurements.wave2d_interface_measurement
 ```
 
+Run the paired Phase 4.6 straight-waveguide experiment with:
+
+```powershell
+python -m simulations.structures.wave2d_straight_waveguide.simulation
+```
+
+Generate its documentation figures headlessly with:
+
+```powershell
+python -m simulations.structures.wave2d_straight_waveguide.figures
+```
+
+Run the paired Phase 4.7 directional-coupler experiment with:
+
+```powershell
+python -m simulations.structures.wave2d_directional_coupler.simulation
+```
+
+Generate its documentation figures headlessly with:
+
+```powershell
+python -m simulations.structures.wave2d_directional_coupler.figures
+```
+
+Inspect the Phase 4.8 advanced-geometry gallery maps with:
+
+```powershell
+python -m simulations.materials.wave2d_geometry_gallery.maps
+```
+
+Generate the gallery documentation figure headlessly with:
+
+```powershell
+python -m simulations.materials.wave2d_geometry_gallery.figures
+```
+
 Module execution is required because `simulations` imports the reusable
 top-level `wavesim` package. Direct execution such as
 `python simulations\foundations\wave2d_basic.py` may not include the
@@ -1231,6 +1284,287 @@ domain; diffraction redistributes field outside the monitor aperture, and the
 sponge removes part of that field. The tests therefore require finite,
 positive, physically scaled responses while testing exact flux balance only
 for the analytical infinite-plane-wave coefficients.
+
+### Advanced-geometry gallery
+
+The Phase 4.8 gallery collects the reusable geometry capabilities introduced
+during Phase 4 into one reproducible material-map figure. It uses a common
+$90 \times 70$ grid and presents six cases with identical axes and one shared
+refractive-index scale:
+
+```text
+Circle
+    circular mask with n = 1.5
+
+Ellipse
+    axis-aligned elliptical mask with n = 1.5
+
+Rotated rectangle
+    physical rotation angle = 30 degrees
+    region index = 1.5
+
+Rotated ellipse
+    physical rotation angle = 35 degrees
+    region index = 1.5
+
+Concave polygon
+    simple non-self-intersecting polygon
+    region index = 1.5
+
+Ordered composition
+    circle index = 1.3
+    rotated-rectangle index = 1.6
+    polygon index = 2.0
+```
+
+The first five panels isolate individual mask constructors. Their boundaries
+show how continuous physical shapes are sampled on the discrete Cartesian
+grid. Positive rotation angles appear counterclockwise because the figure uses
+the same physical-coordinate convention as the geometry API.
+
+The final panel applies the circle, rotated rectangle, and polygon in that
+order. In every overlap, the later region replaces the refractive index written
+by earlier regions. The visible polygon therefore demonstrates the
+last-region-wins composition contract used when constructing photonic
+structures.
+
+This example does not advance the wave equation. The `maps` module constructs
+and validates the material maps, while the `figures` module is responsible only
+for their presentation and reproducible export.
+
+![Phase 4 advanced-geometry gallery](outputs/figures/phase_4/2026-08-27_advanced_geometry_gallery.png)
+
+### Straight dielectric-waveguide scenario
+
+The Phase 4.6 experiment uses one common configuration with two matched
+material maps:
+
+```text
+Uniform reference
+    n = 1.0 throughout the domain
+
+Waveguide
+    cladding index = 1.0
+    core index = 1.5
+    core center y = 69.5
+    core height = 16 cells
+```
+
+The common source and measurement geometry is:
+
+```text
+Grid
+    nx = 220
+    ny = 140
+    dt = 0.4
+    steps = 800
+
+Line source
+    x = 35
+    y indices = [63, 77)
+    amplitude = 0.5
+    frequency = 0.05
+    ramp = 4 cycles
+
+First center monitor
+    x = 90
+    y indices = [63, 77)
+
+Second center monitor
+    x = 150
+    y indices = [63, 77)
+
+Second offset monitor
+    x = 150
+    y indices = [90, 104)
+
+Harmonic analysis
+    steps = [650, 800)
+    samples = 150
+    duration = 60
+    cycles = 3
+```
+
+The monitor names describe matched spatial windows rather than materials. In
+the uniform reference, both the center and offset windows lie in the same
+material. In the waveguide run, the center window lies in the core and the
+offset window lies in the cladding. This permits a controlled comparison with
+identical source, boundary, timing, and monitor positions.
+
+The material layout below marks the finite line source, two longitudinal
+center monitors, and downstream offset monitor.
+
+![Straight-waveguide material and measurement layout](outputs/figures/phase_4/2026-08-22_straight_waveguide_material_map.png)
+
+The matched field panels show the mean-centered RMS field over the three-cycle
+analysis window. They use one shared color scale and display the non-sponge
+portion of the domain. The uniform reference diffracts across the transverse
+domain, while the higher-index strip concentrates the downstream field near
+the waveguide core.
+
+![Matched straight-waveguide RMS-field comparison](outputs/figures/phase_4/2026-08-22_straight_waveguide_rms_comparison.png)
+
+The monitor histories show propagation first reaching the upstream center
+window and then the downstream windows. The shaded interval is the exact
+window used for harmonic-response estimation.
+
+![Straight-waveguide monitor histories](outputs/figures/phase_4/2026-08-22_straight_waveguide_monitor_histories.png)
+
+The measured harmonic field amplitudes are approximately:
+
+```text
+Uniform reference
+    downstream center amplitude = 2.549
+    downstream offset amplitude = 2.035
+    center/offset contrast = 1.253
+
+Dielectric waveguide
+    downstream core amplitude = 6.804
+    downstream cladding amplitude = 0.709
+    core/cladding contrast = 9.591
+
+Matched comparison
+    core-window enhancement = 2.669
+    cladding-window ratio = 0.349
+    contrast improvement = 7.657
+```
+
+These quantities are amplitudes of the spatially averaged harmonic scalar
+field, not power or flux coefficients. Under matched conditions, the
+waveguide increases center-to-offset amplitude contrast by approximately a
+factor of 7.66.
+
+![Straight-waveguide harmonic-response comparison](outputs/figures/phase_4/2026-08-22_straight_waveguide_response_comparison.png)
+
+### Directional-coupler scenario
+
+The Phase 4.7 experiment compares two matched material configurations:
+
+```text
+Isolated upper-guide reference
+    cladding index = 1.0
+    upper-core index = 1.5
+    upper-core center y = 90
+    lower spatial window contains cladding
+
+Directional coupler
+    cladding index = 1.0
+    upper-core index = 1.5
+    lower-core index = 1.5
+    upper-core center y = 90
+    lower-core center y = 76
+    nominal core height = 12 grid units
+    nominal gap between cores = 2 grid units
+```
+
+The isolated reference contains only the upper guide. Its lower monitor is
+therefore a matched spatial window in the cladding, not a second core. The
+directional-coupler map adds the lower guide while preserving the grid,
+source, boundary, timing, and monitor positions.
+
+The common simulation and measurement configuration is:
+
+```text
+Grid
+    nx = 220
+    ny = 160
+    dt = 0.4
+    steps = 900
+
+Sponge boundary
+    width = 20 cells
+
+Upper-guide line source
+    x = 35
+    y indices = [85, 96)
+    amplitude = 0.5
+    frequency = 0.05
+    ramp = 4 cycles
+
+Upstream monitors
+    x = 90
+    upper y indices = [85, 96)
+    lower y indices = [71, 82)
+
+Downstream monitors
+    x = 170
+    upper y indices = [85, 96)
+    lower y indices = [71, 82)
+
+Harmonic analysis
+    steps = [750, 900)
+    samples = 150
+    duration = 60
+    cycles = 3
+```
+
+The source excites only the upper guide. The material and measurement layout
+shows the two parallel cores, their small separating gap, the source, and the
+four monitor windows.
+
+![Directional-coupler material and measurement layout](outputs/figures/phase_4/2026-08-25_directional_coupler_material_map.png)
+
+The matched RMS-field comparison uses one shared color scale and displays the
+non-sponge portion of the domain. The isolated reference remains primarily
+localized in the upper guide. In the coupled structure, the field gradually
+redistributes and becomes concentrated in the lower guide farther downstream.
+
+![Matched directional-coupler RMS-field comparison](outputs/figures/phase_4/2026-08-25_directional_coupler_rms_comparison.png)
+
+The monitor histories show when the propagating field reaches each upstream
+and downstream measurement window. The shaded interval is the exact
+three-cycle window used for harmonic-response estimation.
+
+![Directional-coupler monitor histories](outputs/figures/phase_4/2026-08-25_directional_coupler_monitor_histories.png)
+
+The measured harmonic field amplitudes are approximately:
+
+```text
+Isolated upper-guide reference
+    downstream upper amplitude = 6.518
+    downstream lower amplitude = 0.971
+    downstream lower/upper ratio = 0.149
+
+Directional coupler, upstream
+    upper amplitude = 5.313
+    lower amplitude = 1.387
+    lower/upper ratio = 0.261
+
+Directional coupler, downstream
+    upper amplitude = 0.341
+    lower amplitude = 6.171
+    lower/upper ratio = 18.110
+
+Matched comparison
+    downstream lower-window enhancement = 6.355
+```
+
+The lower-to-upper ratio rises substantially between the upstream and
+downstream positions. The downstream lower-window amplitude is approximately
+6.36 times the response of the same spatial window in the isolated reference.
+Together with the RMS field, this demonstrates spatial field transfer from
+the initially excited upper guide to the lower guide.
+
+For visualization, the lower-window amplitude share is defined as
+
+```text
+lower amplitude / (upper amplitude + lower amplitude)
+```
+
+and has the approximate values:
+
+```text
+Isolated reference, downstream = 0.130
+Directional coupler, upstream = 0.207
+Directional coupler, downstream = 0.948
+```
+
+This share is a normalized amplitude comparison, not a power fraction.
+Likewise, the reported monitor values are amplitudes of spatially averaged
+harmonic scalar fields. They are not modal powers, coupling efficiencies, or
+transverse electromagnetic flux coefficients.
+
+![Directional-coupler harmonic-response comparison](outputs/figures/phase_4/2026-08-25_directional_coupler_response_comparison.png)
 
 ### Planar-interface scenario
 
@@ -1490,7 +1824,16 @@ The tests cover:
 - finite-aperture response bounds and limitations;
 - source and monitor visualization overlays;
 - monitor-history and analysis-window visualization;
-- the stable Phase 3 public API and cross-feature scenario contracts.
+- the stable Phase 3 public API and cross-feature scenario contracts;
+- physical grid-coordinate construction and geometry-mask validation;
+- circular, elliptical, rotated rectangular, and rotated elliptical masks;
+- convex and concave polygon construction and validation;
+- immutable material-region ownership and ordered batch composition;
+- matched straight-waveguide construction and propagation;
+- directional-coupler construction and downstream spatial field transfer;
+- advanced-geometry gallery construction;
+- reproducible Phase 4 figure generation;
+- the stable Phase 4 public API and cross-feature regression behavior.
 
 The Phase 2 baseline contains:
 
@@ -1498,10 +1841,10 @@ The Phase 2 baseline contains:
 59 tests
 ```
 
-The completed suite contains:
+The completed Phase 4 suite contains:
 
 ```text
-Ran 139 tests in 9.946s
+Ran 220 tests in 30.464s
 
 OK
 ```
@@ -1779,16 +2122,27 @@ The complete simulation-log index and historical-record policy are in:
 - [x] Phase 3.8: Source and monitor visualization
 - [x] Phase 3.9: Final audit and repository closeout
 
-### Possible future phases
+### Phase 4 - Advanced geometry and photonic structures
 
-- mask-based circles, ellipses, polygons, and rotated geometries;
+- [x] Phase 4.1: Geometry conventions and baseline
+- [x] Phase 4.2: Circular and elliptical regions
+- [x] Phase 4.3: Rotated rectangular and elliptical regions
+- [x] Phase 4.4: Polygon regions
+- [x] Phase 4.5: Geometry composition contract
+- [x] Phase 4.6: Straight dielectric waveguide
+- [x] Phase 4.7: Coupled photonic structure
+- [x] Phase 4.8: Visualization and reproducible examples
+- [x] Phase 4.9: Final validation and repository closeout
+
+### Possible later phases
+
 - Gaussian beams and angled phased-array sources;
 - total-field/scattered-field source injection;
 - full transverse time-averaged flux monitors;
 - conservative interface discretizations;
 - improved absorbing boundaries and PML;
 - TE and TM electromagnetic FDTD solvers;
-- waveguides, resonators, and scattering structures;
+- resonators and additional scattering structures;
 - automated result saving and parameter studies.
 
 ## Purpose

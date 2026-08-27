@@ -24,6 +24,20 @@ python -m simulations.materials.wave2d_composite_geometry
 Each module exposes a headless-compatible `create_scenario()` function and an
 interactive `main()` entry point.
 
+The Phase 4.8 advanced-geometry gallery is a static material-map example, so
+it separates map construction from figure generation instead of advancing a
+wave simulation:
+
+```powershell
+python -m simulations.materials.wave2d_geometry_gallery.maps
+python -m simulations.materials.wave2d_geometry_gallery.figures
+```
+
+The first command reports the six validated gallery cases. The second saves a
+shared-scale comparison of the circle, ellipse, rotated rectangle, rotated
+ellipse, concave polygon, and ordered composition under
+`outputs/figures/phase_4/`.
+
 ## Controlled measurements
 
 `measurements/` contains scenarios designed for monitor-based quantitative
@@ -38,5 +52,42 @@ The controlled-line-source module validates propagation in a uniform medium.
 The interface-measurement module runs matched reference and dielectric
 experiments and derives harmonic scattering estimates.
 
+## Photonic structures
+
+Scenarios that require multiple related modules live in dedicated subfolders
+under `structures/`. The straight-waveguide package contains separate
+simulation and documentation-figure entry points:
+
+```powershell
+python -m simulations.structures.wave2d_straight_waveguide.simulation
+python -m simulations.structures.wave2d_straight_waveguide.figures
+```
+
+The first command runs and reports the matched uniform-reference and dielectric-
+waveguide experiment. The second saves the material layout, RMS-field
+comparison, monitor histories, and harmonic-response comparison under
+`outputs/figures/phase_4/`.
+
 Run module commands from the repository root so the top-level `wavesim`
 package is importable.
+
+The Phase 4.7 directional-coupler package contains a matched isolated-guide
+reference and parallel-guide coupling experiment:
+
+```powershell
+python -m simulations.structures.wave2d_directional_coupler.simulation
+```
+
+The source excites only the upper guide. Upstream and downstream upper/lower
+monitor windows measure the evolution of scalar harmonic field transfer along
+the coupled structure.
+
+Generate the Phase 4.7 documentation figures with:
+
+```powershell
+python -m simulations.structures.wave2d_directional_coupler.figures
+```
+
+The generator saves the coupled material layout, matched RMS-field comparison,
+monitor histories, and harmonic-response comparison under
+`outputs/figures/phase_4/`.
