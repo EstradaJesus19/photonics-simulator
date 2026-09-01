@@ -314,7 +314,7 @@ def add_source_and_monitor_overlays(
         axis.plot(
             source.x,
             source.y,
-            marker="*",
+            marker="o",
             markersize=10,
             color="gold",
             markeredgecolor="black",
@@ -352,6 +352,49 @@ def add_source_and_monitor_overlays(
                 linewidth=1.5,
                 linestyle=":",
                 label=f"Monitor: {monitor.name}",
+            )
+
+        elif monitor.kind == "horizontal_line":
+            axis.plot(
+                [monitor.x_start, monitor.x_stop - 1],
+                [monitor.y, monitor.y],
+                color="lime",
+                linewidth=1.5,
+                linestyle=":",
+                label=f"Monitor: {monitor.name}",
+            )
+
+    for monitor in simulation.config.flux_monitors:
+        if monitor.axis == "x":
+            axis.plot(
+                [
+                    monitor.face_index + 0.5,
+                    monitor.face_index + 0.5,
+                ],
+                [
+                    monitor.transverse_start,
+                    monitor.transverse_stop - 1,
+                ],
+                color="cyan",
+                linewidth=1.5,
+                linestyle="--",
+                label=f"Flux monitor: {monitor.name}",
+            )
+
+        elif monitor.axis == "y":
+            axis.plot(
+                [
+                    monitor.transverse_start,
+                    monitor.transverse_stop - 1,
+                ],
+                [
+                    monitor.face_index + 0.5,
+                    monitor.face_index + 0.5,
+                ],
+                color="cyan",
+                linewidth=1.5,
+                linestyle="--",
+                label=f"Flux monitor: {monitor.name}",
             )
 
 def add_monitor_history_figure(

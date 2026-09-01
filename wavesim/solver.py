@@ -26,7 +26,10 @@ from .sources import (
 
 from .monitors import (
     FieldMonitorState,
+    FluxMonitorState,
+    create_flux_monitor_states,
     create_monitor_states,
+    record_flux_monitor_samples,
     record_monitor_samples,
 )
 
@@ -152,38 +155,114 @@ def initialize_fields(
     return previous, current
 
 
+def compute_energy_density(
+    previous: np.ndarray,
+    current: np.ndarray,
+    config: SimulationConfig,
+    material_map: MaterialMap,
+) -> np.ndarray:
+    """Return nodal leapfrog energy density at the intermediate time."""
+    grid = config.grid
+    time = config.time
+
+    velocity = (current - previous) / time.dt
+
+    previous_gradient_x = (
+        previous[1:, :] - previous[:-1, :]
+    ) / grid.dx
+    current_gradient_x = (
+        current[1:, :] - current[:-1, :]
+    ) / grid.dx
+
+    previous_gradient_y = (
+        previous[:, 1:] - previous[:, :-1]
+    ) / grid.dy
+    current_gradient_y = (
+        current[:, 1:] - current[:, :-1]
+    ) / grid.dy
+
+    potential_x = (
+        current_gradient_x * previous_gradient_x
+    )
+    potential_y = (
+        current_gradient_y * previous_gradient_y
+    )
+
+    energy_density = (
+        0.5
+        * velocity**2
+        / material_map.wave_speed**2
+    )
+
+    # Each face contribution is shared equally by its two
+    # adjacent nodal control volumes.
+    energy_density[:-1, :] += 0.25 * potential_x
+    energy_density[1:, :] += 0.25 * potential_x
+
+    energy_density[:, :-1] += 0.25 * potential_y
+    energy_density[:, 1:] += 0.25 * potential_y
+
+    return energy_density
+
+
 def compute_energy(
     previous: np.ndarray,
     current: np.ndarray,
     config: SimulationConfig,
     material_map: MaterialMap,
 ) -> float:
-    """Estimate the total scalar-wave energy in the domain."""
+    """Return the leapfrog energy between two consecutive field levels."""
+    energy_density = compute_energy_density(
+        previous,
+        current,
+        config,
+        material_map,
+    )
+
+    return float(
+        np.sum(energy_density)
+        * config.grid.dx
+        * config.grid.dy
+    )
+
+
+def compute_energy_flux(
+    previous: np.ndarray,
+    current: np.ndarray,
+    next_field: np.ndarray,
+    config: SimulationConfig,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Return scalar-energy fluxes on x- and y-directed faces."""
     grid = config.grid
     time = config.time
 
-    velocity = (current - previous) / time.dt
+    centered_velocity = (
+        next_field - previous
+    ) / (2.0 * time.dt)
 
-    gradient_x = np.zeros_like(current)
-    gradient_y = np.zeros_like(current)
+    gradient_x = (
+        current[1:, :] - current[:-1, :]
+    ) / grid.dx
 
-    gradient_x[1:-1, 1:-1] = (
-        current[2:, 1:-1] - current[:-2, 1:-1]
-    ) / (2.0 * grid.dx)
-
-    gradient_y[1:-1, 1:-1] = (
-        current[1:-1, 2:] - current[1:-1, :-2]
-    ) / (2.0 * grid.dy)
-
-    energy_density = (
-        0.5 * velocity**2 / material_map.wave_speed**2
-        + 0.5 * (
-            gradient_x**2
-            + gradient_y**2
-        )
+    velocity_x_faces = 0.5 * (
+        centered_velocity[1:, :]
+        + centered_velocity[:-1, :]
     )
 
-    return float(np.sum(energy_density) * grid.dx * grid.dy)
+    flux_x = -velocity_x_faces * gradient_x
+
+    gradient_y = (
+        current[:, 1:] - current[:, :-1]
+    ) / grid.dy
+
+    velocity_y_faces = 0.5 * (
+        centered_velocity[:, 1:]
+        + centered_velocity[:, :-1]
+    )
+
+    flux_y = -velocity_y_faces * gradient_y
+
+    return flux_x, flux_y
 
 
 def step_wave(
@@ -308,6 +387,9 @@ class Wave2DSimulation:
                 self.state.current,
             )
         )
+        self.flux_monitor_states: dict[str, FluxMonitorState] = (
+            create_flux_monitor_states(config.flux_monitors)
+        )
 
         self.initial_energy = initial_energy
         self.normalize_energy = (
@@ -339,6 +421,22 @@ class Wave2DSimulation:
             self.config,
             self.source_profile,
         )
+
+        if self.config.flux_monitors:
+            flux_x, flux_y = compute_energy_flux(
+                self.state.previous,
+                self.state.current,
+                next_field,
+                self.config,
+            )
+            record_flux_monitor_samples(
+                self.config.flux_monitors,
+                self.flux_monitor_states,
+                flux_x,
+                flux_y,
+                self.state.step_index,
+                self.config.time.dt,
+            )
 
         current_energy = compute_energy(
             self.state.current,

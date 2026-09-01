@@ -1,12 +1,15 @@
 """Public API for the photonics simulator."""
 
 from .analysis import (
+    AveragePower,
     HarmonicResponse,
+    estimate_average_power,
     estimate_harmonic_response,
 )
 from .config import (
     BoundaryConfig,
     FieldMonitorConfig,
+    FluxMonitorConfig,
     GridConfig,
     InitialConditionConfig,
     MaterialConfig,
@@ -42,14 +45,17 @@ from .materials import (
     add_polygonal_region,
     compose_material_regions,
 )
-from .monitors import FieldMonitorState
+from .monitors import FieldMonitorState, FluxMonitorState
 from .solver import SimulationState, Wave2DSimulation
 
 
 __all__ = [
+    "AveragePower",
     "BoundaryConfig",
     "FieldMonitorConfig",
     "FieldMonitorState",
+    "FluxMonitorConfig",
+    "FluxMonitorState",
     "GridConfig",
     "HarmonicResponse",
     "InitialConditionConfig",
@@ -71,6 +77,7 @@ __all__ = [
     "create_planar_interface_material_map",
     "create_rectangular_material_map",
     "create_uniform_material_map",
+    "estimate_average_power",
     "estimate_harmonic_response",
     "validate_geometry_mask",
     "validate_material_map",

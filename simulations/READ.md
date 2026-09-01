@@ -46,11 +46,26 @@ analysis:
 ```powershell
 python -m simulations.measurements.wave2d_controlled_line_source
 python -m simulations.measurements.wave2d_interface_measurement
+python -m simulations.measurements.wave2d_flux_propagation
+python -m simulations.measurements.wave2d_flux_interface_transmission
 ```
 
 The controlled-line-source module validates propagation in a uniform medium.
 The interface-measurement module runs matched reference and dielectric
 experiments and derives harmonic scattering estimates.
+
+The scalar-flux propagation module launches a symmetric finite-aperture line
+source in a uniform medium. Indexed face monitors verify negative left-going
+power, positive right-going power, approximate launch symmetry, and
+consistency between downstream measurement planes.
+
+The scalar interface-transmission module runs a uniform reference and a
+planar-interface experiment with identical source, grid, boundary, and flux-
+monitor configurations. Dividing the transmitted mean power in the interface
+run by the power at the same face in the reference run gives a measured scalar
+transmission of approximately `0.95275` for `n = 1.0 -> 1.5`, compared with
+the analytical value `0.96`. The approximately `0.76%` relative error is
+within the scenario's `2%` validation tolerance.
 
 ## Photonic structures
 

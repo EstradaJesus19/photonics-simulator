@@ -1773,16 +1773,11 @@ The second term is associated with spatial gradients and can be interpreted as a
 
 ### 25.1 Time derivative
 
-The current implementation approximates the time derivative using two consecutive time states:
+For two consecutive time states, the implementation defines the half-step
+velocity:
 
 ```math
-u_t
-\approx
-\frac{
-u^n-u^{n-1}
-}{
-\Delta t
-}.
+v^{n-1/2}=\frac{u^n-u^{n-1}}{\Delta t}.
 ```
 
 In code:
@@ -1793,83 +1788,66 @@ velocity = (current - previous) / dt
 
 ### 25.2 Spatial derivatives
 
-The x derivative is approximated using:
+Phase 5.1 places spatial differences on the faces between adjacent nodes. The
+x-face difference is:
 
 ```math
-u_x
-\approx
-\frac{
-u_{i+1,j}-u_{i-1,j}
-}{
-2\Delta x
-}.
+D_xu_{i+1/2,j}^{n}
+=
+\frac{u_{i+1,j}^{n}-u_{i,j}^{n}}{\Delta x}.
 ```
 
 In code:
 
 ```python
-gradient_x[1:-1, 1:-1] = (
-    current[2:, 1:-1]
-    - current[:-2, 1:-1]
-) / (2.0 * dx)
+gradient_x = (
+    current[1:, :] - current[:-1, :]
+) / dx
 ```
 
-The y derivative is approximated using:
+The y-face difference is:
 
 ```math
-u_y
-\approx
-\frac{
-u_{i,j+1}-u_{i,j-1}
-}{
-2\Delta y
-}.
+D_yu_{i,j+1/2}^{n}
+=
+\frac{u_{i,j+1}^{n}-u_{i,j}^{n}}{\Delta y}.
 ```
 
 In code:
 
 ```python
-gradient_y[1:-1, 1:-1] = (
-    current[1:-1, 2:]
-    - current[1:-1, :-2]
-) / (2.0 * dy)
+gradient_y = (
+    current[:, 1:] - current[:, :-1]
+) / dy
 ```
 
 ### 25.3 Total discrete energy
 
-The energy density is calculated using:
-
-```python
-energy_density = (
-    0.5 * velocity**2 / material_map.wave_speed**2
-    + 0.5 * (
-        gradient_x**2
-        + gradient_y**2
-    )
-)
-```
-
-The spatial integral is approximated by a sum:
+The centered leapfrog update exactly conserves the half-step energy:
 
 ```math
-E
-\approx
-\sum_{i,j}
-\mathcal{E}_{i,j}
-\Delta x\Delta y.
+\begin{aligned}
+E_h^{n+1/2}
+={}&
+\frac12\sum_{i,j}
+\frac{(v_{i,j}^{n+1/2})^2}{c_{i,j}^2}\Delta x\Delta y
+\\
+&+\frac12\sum_{x\text{-faces}}
+D_xu^{n+1}D_xu^n\Delta x\Delta y
+\\
+&+\frac12\sum_{y\text{-faces}}
+D_yu^{n+1}D_yu^n\Delta x\Delta y.
+\end{aligned}
 ```
 
-In code:
+The cross-time potential terms arise directly from multiplying the leapfrog
+equation by its centered velocity. They make the diagnostic an exact invariant
+of the source-free, undamped fixed-boundary update rather than only an
+independent approximation of continuous energy.
 
-```python
-total_energy = (
-    np.sum(energy_density)
-    * dx
-    * dy
-)
-```
-
-The diagnostic is approximate and should not be interpreted as an exact invariant of the discrete scheme.
+The detailed proof, including discrete summation by parts and the associated
+face flux, is given in
+[Scalar Energy and Flux](04_scalar_energy_and_flux.md).
 
 ### 25.4 Gaussian pulse
 

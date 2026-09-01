@@ -13,11 +13,11 @@ class DefaultSimulationRegressionTest(unittest.TestCase):
         simulation = Wave2DSimulation(create_default_config())
 
         expected_energy = {
-            1: 0.03182002983188608,
-            50: 10.861960749063872,
-            100: 22.499974544196014,
-            250: 50.83918140302646,
-            500: 70.13486394160974,
+            1: 0.027431060199901793,
+            50: 11.042718107713227,
+            100: 22.821884763597474,
+            250: 51.90982277963436,
+            500: 71.94235029456604,
         }
 
         for step in range(1, 501):

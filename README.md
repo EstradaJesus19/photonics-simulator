@@ -212,8 +212,8 @@ The current implementation includes:
 - read-only source profiles during active simulations;
 - finite-aperture vertical sinusoidal line sources;
 - configurable sine-squared source turn-on ramps;
-- named point field monitors;
-- named vertical-line field monitors;
+- named point, vertical-line, and horizontal-line field monitors;
+- face-centered x- and y-directed scalar-energy flux monitors;
 - coherent line-mean field sampling;
 - monitor histories aligned with completed simulation time levels;
 - single-frequency harmonic amplitude and phase estimation;
@@ -323,9 +323,10 @@ photonics-simulator/
 
 `wavesim/monitors.py`
 
-- point and vertical-line sampling;
+- point, vertical-line, and horizontal-line field sampling;
 - coherent spatial-mean reduction;
-- monitor-history initialization and recording.
+- face-flux profile sampling and signed aperture integration;
+- field- and flux-monitor history recording.
 
 `wavesim/analysis.py`
 
@@ -343,6 +344,7 @@ photonics-simulator/
 - simulation state and time stepping;
 - precomputed source-profile ownership;
 - time-aligned monitor sampling;
+- integer-time face-flux sampling after source application;
 - validation and use of optionally supplied material maps.
 
 The solver does not depend on Matplotlib and can be used in tests or future
@@ -424,8 +426,11 @@ imported directly:
 
 ```python
 from wavesim import (
+    AveragePower,
     FieldMonitorConfig,
     FieldMonitorState,
+    FluxMonitorConfig,
+    FluxMonitorState,
     GridConfig,
     HarmonicResponse,
     MaterialConfig,
@@ -437,6 +442,7 @@ from wavesim import (
     create_planar_interface_material_map,
     create_rectangular_material_map,
     create_uniform_material_map,
+    estimate_average_power,
     estimate_harmonic_response,
 )
 ```
@@ -456,12 +462,14 @@ Configuration values are grouped into frozen dataclasses:
 - `InitialConditionConfig`;
 - `SourceConfig`;
 - `FieldMonitorConfig`;
+- `FluxMonitorConfig`;
 - `BoundaryConfig`;
 - `VisualizationConfig`;
 - `SimulationConfig`.
 
-`SimulationConfig.monitors` is an immutable tuple and defaults to an empty
-tuple, so existing configurations remain compatible.
+`SimulationConfig.monitors` and `SimulationConfig.flux_monitors` are immutable
+tuples and default to empty tuples, so existing configurations remain
+compatible.
 
 The default configuration can be created with
 
@@ -857,6 +865,15 @@ and initially support the coherent spatial mean:
 The coherent mean retains sign and phase information. An RMS reduction would
 discard both and is therefore not used for the harmonic measurements.
 
+Horizontal-line monitors use the corresponding index convention:
+
+```python
+field[
+    monitor.x_start:monitor.x_stop,
+    monitor.y,
+]
+```
+
 Each `FieldMonitorState` stores parallel lists of:
 
 ```text
@@ -876,6 +893,59 @@ t_n=n\Delta t.
 
 After (N) calls to `advance()`, monitor and energy histories both contain
 (N+1) entries.
+
+## Scalar-energy flux monitors
+
+`FluxMonitorConfig` defines an indexed face aperture separately from field
+monitors. For `axis="x"`, `face_index=k` selects `flux_x[k, :]`, which lies
+between node columns `k` and `k + 1`. For `axis="y"`, it selects the analogous
+face between node rows. `transverse_start:transverse_stop` is always a
+half-open index interval.
+
+Each `FluxMonitorState` stores immutable copies of the selected instantaneous
+face-flux profiles together with their steps and times. Profiles preserve the
+transverse distribution. Signed aperture power remains derivable as:
+
+```math
+P_x^n=\sum_jF_{x,i+1/2,j}^n\Delta y,
+\qquad
+P_y^n=\sum_iF_{y,i,j+1/2}^n\Delta x.
+```
+
+Flux is calculated after source application from the three field levels
+$u^{n-1}$, $u^n$, and $u^{n+1}$ and is labeled at its mathematical time
+$t^n$. Direct overlap between an active source profile and a flux-monitor
+face aperture is rejected. Positive values follow the positive coordinate
+axis; no absolute-value reduction is applied.
+
+`compute_flux_power_history` converts the stored profiles into instantaneous
+signed aperture power without discarding the original transverse data. The
+conversion uses `dy` for x-directed flux and `dx` for y-directed flux.
+
+`estimate_average_power` then analyzes a half-open interval of that scalar
+power history:
+
+```math
+\overline P
+=
+\frac{1}{N}
+\sum_{n=n_0}^{n_1-1}P^n.
+```
+
+`AveragePower` reports the mean power, window bounds, sample count, duration,
+and optional source-frequency and cycle-count metadata. Its signed transported
+energy is derived using the rectangular time quadrature:
+
+```math
+W=\overline P\,T
+=
+\Delta t\sum_{n=n_0}^{n_1-1}P^n.
+```
+
+Positive and negative signs retain the coordinate-direction convention of the
+underlying flux monitor. Harmonic analyses may request a minimum number of
+cycles, but an integer-cycle window remains a recommended experiment choice
+rather than an API requirement.
 
 ## Harmonic-response analysis
 
@@ -967,8 +1037,8 @@ The program raises an error when the configured time step is unstable.
 
 ## Energy diagnostic
 
-For the selected second-order \(E_z\) equation, the implemented mathematical
-wave-energy diagnostic is
+For the selected second-order \(E_z\) equation, the continuous mathematical
+wave energy is
 
 ```math
 E
@@ -984,6 +1054,16 @@ u_x^2+u_y^2
 \right]
 \Delta x\Delta y.
 ```
+
+The implementation uses the exactly conserved half-step invariant of the
+centered leapfrog update. Its velocity is evaluated between consecutive time
+levels, its gradients live on the faces between adjacent nodes, and its
+potential term uses the cross-time products
+$D u^{n+1}D u^n$. For a source-free, undamped simulation with fixed
+boundaries, this discrete energy is conserved up to floating-point roundoff.
+
+The complete derivation is given in
+[Scalar Energy and Flux](notes/mathematics/04_scalar_energy_and_flux.md).
 
 For a source-free simulation with nonzero initial energy, the program plots
 normalized remaining energy:
@@ -1853,11 +1933,11 @@ For the default 500-step simulation, the protected energy checkpoints are
 approximately:
 
 ```text
-Step 1:     0.03182002983188608
-Step 50:   10.861960749063872
-Step 100:  22.499974544196014
-Step 250:  50.83918140302646
-Step 500:  70.13486394160974
+Step 1:     0.027431060199901793
+Step 50:   11.042718107713227
+Step 100:  22.821884763597474
+Step 250:  51.90982277963436
+Step 500:  71.94235029456604
 ```
 
 ## Phase 2 validation
@@ -1989,6 +2069,15 @@ HarmonicResponse
 estimate_harmonic_response
 ```
 
+Phase 5 adds the public configuration and state types:
+
+```text
+FluxMonitorConfig
+FluxMonitorState
+AveragePower
+estimate_average_power
+```
+
 Source construction, sampling helpers, and the scenario-specific
 `ScatteringResponse` remain internal implementation details.
 
@@ -2013,8 +2102,9 @@ The Phase 3 implementation:
 - launches line-source waves in both positive and negative (x) directions;
 - does not provide Gaussian beams, angled phased sources, or total-field/
   scattered-field injection;
-- supports point and coherent line-mean field monitors, but not full-domain
-  time-averaged flux monitors;
+- supports point and coherent vertical- and horizontal-line field monitors;
+- stores indexed x- and y-face scalar-flux profiles and derives signed
+  instantaneous-power histories and time-windowed average power;
 - uses finite-aperture reference subtraction for approximate scalar-interface
   measurements;
 - does not provide complete quantitative Fresnel validation;
@@ -2134,11 +2224,22 @@ The complete simulation-log index and historical-record policy are in:
 - [x] Phase 4.8: Visualization and reproducible examples
 - [x] Phase 4.9: Final validation and repository closeout
 
+### Phase 5 - Scalar energy-flux diagnostics
+
+- [x] Phase 5.1: Continuous and leapfrog-discrete energy formulation
+- [x] Phase 5.2: Conserved energy density and face-flux primitives
+- [x] Phase 5.3: Indexed field and flux-monitor geometry
+- [x] Phase 5.4: Face-flux profile histories and source-overlap contract
+- [x] Phase 5.5: Time-windowed average-power analysis and validation
+- [x] Phase 5.6: Uniform-medium signed-flux propagation experiment
+- [x] Phase 5.7: Matched-reference scalar interface transmission
+- [x] Phase 5.8: Full validation and documentation closeout
+
 ### Possible later phases
 
 - Gaussian beams and angled phased-array sources;
 - total-field/scattered-field source injection;
-- full transverse time-averaged flux monitors;
+- flux-based reflection and waveguide-power experiments;
 - conservative interface discretizations;
 - improved absorbing boundaries and PML;
 - TE and TM electromagnetic FDTD solvers;

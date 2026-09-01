@@ -17,7 +17,10 @@ VALID_SOURCES = {
 VALID_MONITORS = {
     "point",
     "vertical_line",
+    "horizontal_line",
 }
+
+VALID_FLUX_MONITOR_AXES = {"x", "y"}
 
 VALID_MONITOR_REDUCTIONS = {
     "mean",
@@ -85,11 +88,24 @@ class FieldMonitorConfig:
 
     name: str
     kind: str
-    x: int
+    x: int | None = None
     y: int | None = None
+    x_start: int | None = None
+    x_stop: int | None = None
     y_start: int | None = None
     y_stop: int | None = None
     reduction: str = "mean"
+
+
+@dataclass(frozen=True)
+class FluxMonitorConfig:
+    """Configuration for one face-centered scalar-energy flux monitor."""
+
+    name: str
+    axis: str
+    face_index: int
+    transverse_start: int
+    transverse_stop: int
 
 
 @dataclass(frozen=True)
@@ -125,6 +141,7 @@ class SimulationConfig:
     boundary: BoundaryConfig
     visualization: VisualizationConfig
     monitors: tuple[FieldMonitorConfig, ...] = ()
+    flux_monitors: tuple[FluxMonitorConfig, ...] = ()
 
 
 def create_default_config() -> SimulationConfig:
@@ -388,19 +405,21 @@ def validate_config(config: SimulationConfig) -> None:
                 f"Available options: {sorted(VALID_MONITORS)}"
             )
 
-        if not (
-            isinstance(monitor.x, (int, np.integer))
-            and not isinstance(monitor.x, (bool, np.bool_))
-        ):
-            raise TypeError("Monitor x-coordinate must be an integer.")
-
-        if not (1 <= monitor.x < grid.nx - 1):
-            raise ValueError(
-                "Monitor x-coordinate must be inside "
-                "the interior domain."
-            )
-
         if monitor.kind == "point":
+            if not (
+                isinstance(monitor.x, (int, np.integer))
+                and not isinstance(monitor.x, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Point-monitor x-coordinate must be an integer."
+                )
+
+            if not (1 <= monitor.x < grid.nx - 1):
+                raise ValueError(
+                    "Point-monitor x-coordinate must be inside "
+                    "the interior domain."
+                )
+
             if not (
                 isinstance(monitor.y, (int, np.integer))
                 and not isinstance(monitor.y, (bool, np.bool_))
@@ -416,6 +435,21 @@ def validate_config(config: SimulationConfig) -> None:
                 )
 
         if monitor.kind == "vertical_line":
+            if not (
+                isinstance(monitor.x, (int, np.integer))
+                and not isinstance(monitor.x, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Vertical-line monitor x-coordinate "
+                    "must be an integer."
+                )
+
+            if not (1 <= monitor.x < grid.nx - 1):
+                raise ValueError(
+                    "Vertical-line monitor x-coordinate must be "
+                    "inside the interior domain."
+                )
+
             if (
                 monitor.y_start is None
                 or monitor.y_stop is None
@@ -472,6 +506,201 @@ def validate_config(config: SimulationConfig) -> None:
                     "Available options: "
                     f"{sorted(VALID_MONITOR_REDUCTIONS)}"
                 )
+
+        if monitor.kind == "horizontal_line":
+            if not (
+                isinstance(monitor.y, (int, np.integer))
+                and not isinstance(monitor.y, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Horizontal-line monitor y-coordinate "
+                    "must be an integer."
+                )
+
+            if not (1 <= monitor.y < grid.ny - 1):
+                raise ValueError(
+                    "Horizontal-line monitor y-coordinate must be "
+                    "inside the interior domain."
+                )
+
+            if (
+                monitor.x_start is None
+                or monitor.x_stop is None
+            ):
+                raise ValueError(
+                    "Horizontal-line monitors require "
+                    "x_start and x_stop."
+                )
+
+            if not (
+                isinstance(monitor.x_start, (int, np.integer))
+                and not isinstance(monitor.x_start, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Monitor x_start must be an integer."
+                )
+
+            if not (
+                isinstance(monitor.x_stop, (int, np.integer))
+                and not isinstance(monitor.x_stop, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    "Monitor x_stop must be an integer."
+                )
+
+            if not (
+                1
+                <= monitor.x_start
+                < monitor.x_stop
+                <= grid.nx - 1
+            ):
+                raise ValueError(
+                    "Horizontal-line monitor bounds must define "
+                    "a nonempty half-open interval inside "
+                    "the interior domain."
+                )
+
+            if monitor.reduction not in VALID_MONITOR_REDUCTIONS:
+                raise ValueError(
+                    f"Unknown monitor reduction: "
+                    f"{monitor.reduction!r}. "
+                    "Available options: "
+                    f"{sorted(VALID_MONITOR_REDUCTIONS)}"
+                )
+
+    for monitor in config.flux_monitors:
+        if not isinstance(monitor, FluxMonitorConfig):
+            raise TypeError(
+                "Each flux monitor must be a FluxMonitorConfig."
+            )
+
+        if not monitor.name or not monitor.name.strip():
+            raise ValueError(
+                "Monitor names must contain non-whitespace characters."
+            )
+
+        if monitor.name in monitor_names:
+            raise ValueError(
+                f"Duplicate monitor name: {monitor.name!r}."
+            )
+
+        monitor_names.add(monitor.name)
+
+        if monitor.axis not in VALID_FLUX_MONITOR_AXES:
+            raise ValueError(
+                f"Unknown flux-monitor axis: {monitor.axis!r}. "
+                "Available options: "
+                f"{sorted(VALID_FLUX_MONITOR_AXES)}"
+            )
+
+        for value, label in (
+            (monitor.face_index, "face_index"),
+            (monitor.transverse_start, "transverse_start"),
+            (monitor.transverse_stop, "transverse_stop"),
+        ):
+            if not (
+                isinstance(value, (int, np.integer))
+                and not isinstance(value, (bool, np.bool_))
+            ):
+                raise TypeError(
+                    f"Flux-monitor {label} must be an integer."
+                )
+
+        if monitor.axis == "x":
+            if not (0 <= monitor.face_index < grid.nx - 1):
+                raise ValueError(
+                    "x-flux face_index must satisfy "
+                    "0 <= face_index < nx - 1."
+                )
+
+            if not (
+                0
+                <= monitor.transverse_start
+                < monitor.transverse_stop
+                <= grid.ny
+            ):
+                raise ValueError(
+                    "x-flux transverse bounds must define a "
+                    "nonempty half-open interval inside the y grid."
+                )
+
+        if monitor.axis == "y":
+            if not (0 <= monitor.face_index < grid.ny - 1):
+                raise ValueError(
+                    "y-flux face_index must satisfy "
+                    "0 <= face_index < ny - 1."
+                )
+
+            if not (
+                0
+                <= monitor.transverse_start
+                < monitor.transverse_stop
+                <= grid.nx
+            ):
+                raise ValueError(
+                    "y-flux transverse bounds must define a "
+                    "nonempty half-open interval inside the x grid."
+                )
+
+        if source.kind == "point_sine":
+            if monitor.axis == "x":
+                source_overlaps = (
+                    source.x in {
+                        monitor.face_index,
+                        monitor.face_index + 1,
+                    }
+                    and monitor.transverse_start
+                    <= source.y
+                    < monitor.transverse_stop
+                )
+            else:
+                source_overlaps = (
+                    source.y in {
+                        monitor.face_index,
+                        monitor.face_index + 1,
+                    }
+                    and monitor.transverse_start
+                    <= source.x
+                    < monitor.transverse_stop
+                )
+
+        elif source.kind == "line_sine":
+            if monitor.axis == "x":
+                source_overlaps = (
+                    source.x in {
+                        monitor.face_index,
+                        monitor.face_index + 1,
+                    }
+                    and max(
+                        monitor.transverse_start,
+                        source.y_start,
+                    )
+                    < min(
+                        monitor.transverse_stop,
+                        source.y_stop,
+                    )
+                )
+            else:
+                source_overlaps = (
+                    monitor.transverse_start
+                    <= source.x
+                    < monitor.transverse_stop
+                    and (
+                        monitor.face_index
+                        in range(source.y_start, source.y_stop)
+                        or monitor.face_index + 1
+                        in range(source.y_start, source.y_stop)
+                    )
+                )
+
+        else:
+            source_overlaps = False
+
+        if source_overlaps:
+            raise ValueError(
+                f"Flux monitor {monitor.name!r} overlaps the active "
+                "source profile."
+            )
 
 
 def print_configuration(
