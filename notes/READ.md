@@ -8,9 +8,9 @@ design records, and current technical references.
 
 | Note | Role | Scope |
 | --- | --- | --- |
-| [Finite Difference Method](mathematics/01_finite_difference_method.md) | Foundational note | Phase 1 derivation, with implementation updates verified through Phase 5.1 |
+| [Finite Difference Method](mathematics/01_finite_difference_method.md) | Foundational note | Phase 1 derivation, with discrete-energy implementation updates verified through Phase 5.1 |
 | [Harmonic Response Analysis](mathematics/02_harmonic_response_analysis.md) | Current technical reference | Phase 3 monitor-history and harmonic analysis |
-| [Scalar Energy and Flux](mathematics/04_scalar_energy_and_flux.md) | Design reference | Phase 5.1 continuous and leapfrog-discrete energy and flux formulation |
+| [Scalar Energy and Flux](mathematics/04_scalar_energy_and_flux.md) | Current technical reference | Completed Phase 5 energy, face-flux, monitor, and average-power formulation |
 | [The Two-Dimensional Wave Equation](physics/01_2d_wave_equation.md) | Foundational note | Physical interpretation of the homogeneous Phase 1 model |
 | [$E_z$-Polarized Dielectric Interface Model](physics/02_ez_dielectric_interface_model.md) | Completed design record | Phase 2.3 model choice and interface contract, with a Phase 3 status update |
 | [Controlled Sources and Field Monitors](physics/03_controlled_sources_and_field_monitors.md) | Current technical reference | Phase 3 source, monitor, and scattering-measurement model |

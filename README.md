@@ -10,10 +10,10 @@ FDTD methods.
 
 ## Current status
 
-**Phase 4 - Advanced geometry and photonic structures is complete. It adds
-physical-coordinate geometry masks, ordered material composition, matched
-waveguide experiments, and reproducible visualization while preserving the
-validated scalar-wave solver.**
+**Phase 5 - Scalar energy-flux diagnostics is complete. It adds a
+leapfrog-consistent conserved-energy diagnostic, indexed face-flux monitors,
+time-windowed average-power analysis, and quantitative uniform-propagation and
+planar-interface transmission experiments.**
 
 - Phase 1 implemented and validated the original two-dimensional scalar-wave
   solver.
@@ -62,6 +62,20 @@ validated scalar-wave solver.**
   Phase 4 visualization set.
 - Phase 4.9 completes the full test, documentation, artifact, path, and public-
   API audit.
+- Phase 5.1 derives the continuous scalar-wave energy law and its numerically
+  consistent leapfrog-discrete counterpart.
+- Phase 5.2 implements the conserved energy and face-centered flux primitives.
+- Phase 5.3 adds separate indexed horizontal and vertical field and flux-
+  monitor geometries.
+- Phase 5.4 records immutable face-flux profiles and defines the source-overlap
+  contract.
+- Phase 5.5 adds signed aperture-power histories and time-windowed average-
+  power analysis.
+- Phase 5.6 validates flux direction, launch symmetry, and downstream power
+  consistency in a uniform medium.
+- Phase 5.7 validates matched-reference scalar transmission through a planar
+  interface.
+- Phase 5.8 completes the Phase 5 test and documentation closeout.
 
 The default uniform simulation and continuous point source remain numerically
 identical to the verified Phase 2.1 simulation. The Phase 2 material scenarios
@@ -79,12 +93,13 @@ amplitude consistency and numerical phase advance. The paired experiment
 isolates the reflected response by subtracting the matched uniform reference
 from the upstream interface response.
 
-The Phase 2 baseline contains 59 tests, and the Phase 3 milestone contained
-139 tests. The completed Phase 4 suite contains 220 tests spanning geometry,
-materials, sources, monitors, harmonic analysis, scenarios, visualization,
-figure generation, numerical regressions, and public-API behavior. All 220
-tests pass. The Phase 2 source-free composite energy result remains within a
-maximum observed deviation of approximately 2.8%.
+The Phase 2 baseline contains 59 tests, the Phase 3 milestone contained 139
+tests, and the Phase 4 milestone contained 220 tests. The completed Phase 5
+suite contains 291 tests spanning energy and flux primitives, monitor
+geometry and histories, average-power analysis, quantitative scenarios,
+visualization, numerical regressions, and public-API behavior. All 291 tests
+pass. The Phase 2 source-free composite energy result remains within a maximum
+observed deviation of approximately 2.8%.
 
 ## Governing model
 
@@ -1929,6 +1944,14 @@ Ran 220 tests in 30.464s
 OK
 ```
 
+The completed Phase 5 suite contains:
+
+```text
+Ran 291 tests
+
+OK
+```
+
 For the default 500-step simulation, the protected energy checkpoints are
 approximately:
 
@@ -2083,7 +2106,7 @@ Source construction, sampling helpers, and the scenario-specific
 
 ## Current limitations
 
-The Phase 3 implementation:
+The current implementation:
 
 - evolves only the \(E_z\) field rather than the full Maxwell field set;
 - provides dedicated helpers for one vertical planar interface and one
@@ -2107,7 +2130,7 @@ The Phase 3 implementation:
   instantaneous-power histories and time-windowed average power;
 - uses finite-aperture reference subtraction for approximate scalar-interface
   measurements;
-- does not provide complete quantitative Fresnel validation;
+- does not provide complete electromagnetic Fresnel validation;
 - requires the caller to choose a steady harmonic-analysis window;
 - stores monitor histories in memory as Python lists;
 - uses a sponge layer rather than a PML;
@@ -2119,14 +2142,15 @@ The Phase 3 implementation:
 - does not save simulation results automatically.
 
 The finite line source produces a controlled plane-wave-like central region,
-but its ends diffract. A central line monitor samples only part of the
-transverse field and therefore does not measure complete power or energy flux.
-The paired measurements are appropriate for separating and comparing harmonic
-fields, not for claiming exact electromagnetic Fresnel coefficients.
+but its ends diffract. Field-monitor amplitude ratios do not measure complete
+power or energy flux. Phase 5 flux monitors can integrate a complete indexed
+transverse aperture, but the result remains a scalar-wave measurement rather
+than an electromagnetic Poynting-flux or exact Fresnel calculation.
 
-These limitations define the Phase 3 scientific boundary. Future geometry,
-source, flux, boundary, and Maxwell-solver work can build on the validated
-material, source-profile, monitoring, and harmonic-analysis infrastructure.
+These limitations define the completed Phase 5 scientific boundary. Future
+source, boundary, flux-based structure, and Maxwell-solver work can build on
+the validated material, source-profile, field-monitor, and scalar-flux
+infrastructure.
 
 ## Documentation
 
@@ -2147,9 +2171,11 @@ behavior, limitations, and future work.
 The mathematics notes are:
 
 - [Finite Difference Method](notes/mathematics/01_finite_difference_method.md),
-  the Phase 1 foundation with implementation updates through Phase 3;
+  the Phase 1 foundation with implementation updates through Phase 5.1;
 - [Harmonic Response Analysis](notes/mathematics/02_harmonic_response_analysis.md),
-  the current Phase 3 analysis reference.
+  the Phase 3 harmonic field-analysis reference;
+- [Scalar Energy and Flux](notes/mathematics/04_scalar_energy_and_flux.md),
+  the Phase 5 energy, face-flux, and average-power reference.
 
 The physics notes are:
 
@@ -2158,7 +2184,7 @@ The physics notes are:
 - [E_z Dielectric Interface Model](notes/physics/02_ez_dielectric_interface_model.md),
   the completed Phase 2.3 model decision and interface contract;
 - [Controlled Sources and Field Monitors](notes/physics/03_controlled_sources_and_field_monitors.md),
-  the current Phase 3 source and measurement reference.
+  the Phase 3 source and field-measurement reference.
 
 The Phase 2 material and geometry documentation includes:
 

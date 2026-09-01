@@ -1,6 +1,7 @@
 # 04 — Scalar Energy and Flux
 
-> **Status:** Current mathematical and numerical reference through Phase 5.5.
+> **Status:** Current mathematical and numerical reference for the completed
+> Phase 5 scalar energy-flux diagnostics.
 >
 > **Scope:** Rigorous derivation of the continuous scalar-wave energy law and
 > its numerically consistent realization for the centered finite-difference

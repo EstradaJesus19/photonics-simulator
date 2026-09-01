@@ -1,12 +1,12 @@
 # 01 — Finite Difference Method
 
-> **Status:** Foundational Phase 1 note, with implementation details verified
-> through Phase 3.
+> **Status:** Foundational Phase 1 note, with discrete-energy implementation
+> details verified through Phase 5.1.
 >
 > **Scope:** The core derivation uses the homogeneous scalar wave equation.
 > Later phases retain the same finite-difference stencil while adding spatial
-> material maps, controlled source profiles, field monitors, and harmonic
-> analysis.
+> material maps, controlled sources, field and flux monitors, harmonic
+> analysis, and a leapfrog-consistent energy diagnostic.
 
 ## 1. Purpose of this note
 
